@@ -1,5 +1,6 @@
 import XCTest
 import CoreLocation
+import MapKit
 @testable import Percorso
 
 final class PercorsoTests: XCTestCase {
@@ -159,6 +160,12 @@ final class PercorsoTests: XCTestCase {
         XCTAssertTrue(ExploreService.query(region: .init(center: .init(latitude: 45, longitude: 9),
                                                          span: .init(latitudeDelta: 0.01, longitudeDelta: 0.01)),
                                            mode: .foot).contains("footway"))
+    }
+
+    func testExploreNeedsZoom() {
+        let center = CLLocationCoordinate2D(latitude: 45.46, longitude: 9.19)
+        XCTAssertFalse(ExploreService.isTooWide(MKCoordinateRegion(center: center, latitudinalMeters: 1500, longitudinalMeters: 1500)))
+        XCTAssertTrue(ExploreService.isTooWide(MKCoordinateRegion(center: center, latitudinalMeters: 15000, longitudinalMeters: 15000)))
     }
 
     func testRouteRankingPrefersNewStreets() {

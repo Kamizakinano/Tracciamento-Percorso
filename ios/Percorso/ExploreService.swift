@@ -58,7 +58,21 @@ final class ExploreService: ObservableObject {
         load(region: region, mode: mode, index: index)
     }
 
+    /// Mappa troppo lontana: le strade di una zona così grande non si leggerebbero.
+    static func isTooWide(_ region: MKCoordinateRegion) -> Bool {
+        region.span.latitudeDelta > maxSpan * 1.6 || region.span.longitudeDelta > maxSpan * 2.2
+    }
+
     private func load(region: MKCoordinateRegion, mode: TravelMode, index: SpatialIndex) {
+        if Self.isTooWide(region) {
+            task?.cancel()
+            loadedRegion = nil
+            lines = []
+            version += 1
+            isLoading = false
+            message = "Avvicina la mappa per vedere le strade nuove."
+            return
+        }
         let span = min(Self.maxSpan, max(region.span.latitudeDelta, 0.005))
         let spanLon = min(Self.maxSpan, max(region.span.longitudeDelta, 0.005))
         let clamped = MKCoordinateRegion(center: region.center,

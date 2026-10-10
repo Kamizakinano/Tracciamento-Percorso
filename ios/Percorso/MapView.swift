@@ -15,6 +15,8 @@ struct MapView: UIViewRepresentable {
     let place: Place?
     @Binding var follow: Bool
     @Binding var focus: Trip?
+    /// Regione da mostrare (per esempio quando si attivano le strade nuove).
+    @Binding var zoomRequest: MKCoordinateRegion?
     var onRegionChange: (MKCoordinateRegion) -> Void = { _ in }
     var onUserLocation: (CLLocationCoordinate2D) -> Void = { _ in }
 
@@ -121,6 +123,16 @@ struct MapView: UIViewRepresentable {
             }
         }
 
+        if let region = zoomRequest {
+            map.setUserTrackingMode(.none, animated: false)
+            map.setRegion(region, animated: true)
+            DispatchQueue.main.async {
+                follow = false
+                zoomRequest = nil
+            }
+            return
+        }
+
         if let trip = focus {
             map.setUserTrackingMode(.none, animated: false)
             Self.fit(map, coords: trip.points.map(\.coordinate))
@@ -170,9 +182,9 @@ struct MapView: UIViewRepresentable {
                 r.lineCap = .round
                 r.lineJoin = .round
                 if multi.title == Self.explore {
-                    r.strokeColor = UIColor.systemGreen.withAlphaComponent(0.85)
-                    r.lineWidth = 5
-                    r.lineDashPattern = [8, 6]
+                    r.strokeColor = UIColor.systemGreen.withAlphaComponent(0.9)
+                    r.lineWidth = 3.5
+                    r.lineDashPattern = [6, 5]
                 } else {
                     let level = Int(multi.title?.dropFirst() ?? "0") ?? 0
                     r.strokeColor = MapView.levelColors[min(level, 2)].withAlphaComponent(0.7)

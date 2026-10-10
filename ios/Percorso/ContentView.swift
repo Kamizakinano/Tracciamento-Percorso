@@ -26,6 +26,7 @@ struct ContentView: View {
     @State private var mapState = MapState()
     @State private var follow = true
     @State private var focus: Trip?
+    @State private var zoomRequest: MKCoordinateRegion?
     @State private var showTrips = false
     @State private var showStats = false
     @State private var askName = false
@@ -50,6 +51,7 @@ struct ContentView: View {
                     place: place,
                     follow: $follow,
                     focus: $focus,
+                    zoomRequest: $zoomRequest,
                     onRegionChange: regionChanged,
                     onUserLocation: { mapState.userLocation = $0 })
                 .ignoresSafeArea()
@@ -326,9 +328,15 @@ struct ContentView: View {
     // MARK: - Strade nuove
 
     private func toggleExplore() {
-        guard let region = mapState.region ?? userRegion else {
+        guard var region = mapState.region ?? userRegion else {
             info = "Posizione attuale non disponibile."
             return
+        }
+        // Mappa troppo lontana: avvicinati alla tua posizione (o al centro della mappa).
+        if !explore.isOn && ExploreService.isTooWide(region) {
+            let center = mapState.userLocation ?? region.center
+            region = MKCoordinateRegion(center: center, latitudinalMeters: 1500, longitudinalMeters: 1500)
+            zoomRequest = region
         }
         explore.toggle(region: region, mode: mode, index: store.index)
     }
