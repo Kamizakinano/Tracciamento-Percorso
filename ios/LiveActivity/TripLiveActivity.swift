@@ -29,7 +29,11 @@ struct TripLiveActivity: Widget {
                         .frame(width: 70)
                 }
                 DynamicIslandExpandedRegion(.bottom) {
-                    StatusLine(state: context.state)
+                    if let instruction = context.state.instruction {
+                        NavigationLine(state: context.state, instruction: instruction)
+                    } else {
+                        StatusLine(state: context.state)
+                    }
                 }
             } compactLeading: {
                 Image(systemName: context.state.onOldRoad ? "exclamationmark.triangle.fill" : context.state.modeIcon)
@@ -73,9 +77,39 @@ private struct LockScreenView: View {
                         .foregroundStyle(.green)
                 }
             }
-            StatusLine(state: context.state)
+            if let instruction = context.state.instruction {
+                NavigationLine(state: context.state, instruction: instruction)
+            } else {
+                StatusLine(state: context.state)
+            }
         }
         .padding()
+    }
+}
+
+private struct NavigationLine: View {
+    let state: TripActivityAttributes.ContentState
+    let instruction: String
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: state.maneuverIcon ?? "arrow.up")
+                .font(.title.weight(.bold))
+                .foregroundStyle(.green)
+            VStack(alignment: .leading, spacing: 2) {
+                if let d = state.maneuverText {
+                    Text(d).font(.headline).foregroundStyle(.white)
+                }
+                Text(instruction)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.9))
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            if state.onOldRoad {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            }
+        }
     }
 }
 

@@ -16,6 +16,7 @@ struct SearchRequest: Identifiable {
 struct ContentView: View {
     @EnvironmentObject private var store: TripStore
     @EnvironmentObject private var tracker: LocationTracker
+    @EnvironmentObject private var navigation: NavigationSession
     @StateObject private var explore = ExploreService()
     @StateObject private var planner = RoutePlanner()
     @AppStorage(Settings.showHistory) private var showHistory = true
@@ -46,9 +47,10 @@ struct ContentView: View {
                     currentPoints: tracker.points,
                     exploreLines: explore.lines,
                     exploreVersion: explore.version,
-                    route: planner.current,
+                    route: navigation.route ?? planner.current,
                     mapType: mapType,
                     place: place,
+                    navigating: navigation.isActive,
                     follow: $follow,
                     focus: $focus,
                     zoomRequest: $zoomRequest,
@@ -56,37 +58,11 @@ struct ContentView: View {
                     onUserLocation: { mapState.userLocation = $0 })
                 .ignoresSafeArea()
 
-            VStack(spacing: 10) {
-                statusBar
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if let place { placeChip(place) }
-                        if let text = info ?? explore.message ?? planner.message { infoChip(text) }
-                    }
-                    Spacer()
-                    VStack(spacing: 10) {
-                        roundButton("magnifyingglass") { search = SearchRequest(query: "") }
-                        mapStyleMenu
-                        exploreButton
-                    }
-                    .shadow(radius: 4)
-                }
-                if tracker.isRecording && tracker.onOldRoad && alertEnabled {
-                    Text("⚠️ Strada già percorsa")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 10)
-                        .background(Color.red, in: RoundedRectangle(cornerRadius: 12))
-                        .shadow(radius: 4)
-                        .transition(.opacity)
-                }
-                Spacer()
-                if planner.destination != nil { routeCard }
-                controls
+            if navigation.isActive {
+                navigationOverlay
+            } else {
+                mainOverlay
             }
-            .padding()
-            .animation(.easeInOut(duration: 0.2), value: tracker.onOldRoad)
         }
         .onAppear {
             follow = store.trips.isEmpty || tracker.isRecording
@@ -98,10 +74,17 @@ struct ContentView: View {
             if let r = mapState.region { explore.refresh(region: r, mode: mode, index: store.index) }
         }
         .sheet(item: $search) { request in
-            SearchView(onSelect: { selected in
-                planner.clear()
-                place = selected
-            }, initialQuery: request.query)
+            RouteSearchView(region: mapState.region ?? userRegion, initialDestination: request.query, mode: mode) { from, to, mode in
+                place = to
+                planRoute(to: to, from: from, mode: mode)
+            }
+        }
+        .onChange(of: navigation.arrived) { arrived in
+            // Arrivato: chiudi la navigazione da solo dopo un po'.
+            guard arrived else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 20) {
+                if navigation.arrived { endNavigation() }
+            }
         }
         .sheet(isPresented: $showTrips) {
             TripsView(focus: $focus)
@@ -128,6 +111,146 @@ struct ContentView: View {
             Button("Annulla", role: .cancel) {}
         } message: {
             Text("Consenti l'accesso alla posizione (\"Sempre\" per la registrazione automatica).")
+        }
+    }
+
+    // MARK: - Schermata normale
+
+    private var mainOverlay: some View {
+        VStack(spacing: 10) {
+            statusBar
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let place { placeChip(place) }
+                    if let text = info ?? explore.message ?? planner.message { infoChip(text) }
+                }
+                Spacer()
+                VStack(spacing: 10) {
+                    roundButton("magnifyingglass") { search = SearchRequest(query: "") }
+                    mapStyleMenu
+                    exploreButton
+                }
+                .shadow(radius: 4)
+            }
+            oldRoadBanner
+            Spacer()
+            if planner.destination != nil { routeCard }
+            controls
+        }
+        .padding()
+        .animation(.easeInOut(duration: 0.2), value: tracker.onOldRoad)
+    }
+
+    @ViewBuilder
+    private var oldRoadBanner: some View {
+        if tracker.isRecording && tracker.onOldRoad && alertEnabled {
+            Text("⚠️ Strada già percorsa")
+                .font(.headline)
+                .foregroundStyle(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color.red, in: RoundedRectangle(cornerRadius: 12))
+                .shadow(radius: 4)
+                .transition(.opacity)
+        }
+    }
+
+    // MARK: - Navigazione
+
+    private var navigationOverlay: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 14) {
+                Image(systemName: navigation.maneuverIcon)
+                    .font(.system(size: 44, weight: .bold))
+                    .frame(width: 60)
+                VStack(alignment: .leading, spacing: 4) {
+                    if navigation.rerouting {
+                        Text("Ricalcolo del percorso…").font(.title3.weight(.semibold))
+                    } else {
+                        if !navigation.arrived {
+                            Text(Geo.formatShort(navigation.distanceToManeuver))
+                                .font(.system(size: 32, weight: .bold))
+                        }
+                        Text(navigation.instruction)
+                            .font(.title3.weight(.semibold))
+                            .lineLimit(3)
+                            .minimumScaleFactor(0.8)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.white)
+            .padding()
+            .background(Color(red: 0.08, green: 0.42, blue: 0.28), in: RoundedRectangle(cornerRadius: 20))
+            .shadow(radius: 6)
+
+            oldRoadBanner
+            Spacer()
+
+            if !follow {
+                Button {
+                    follow = true
+                } label: {
+                    Label("Ricentra", systemImage: "location.north.line.fill")
+                        .font(.headline)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 10)
+                        .background(.regularMaterial, in: Capsule())
+                }
+                .shadow(radius: 4)
+            }
+
+            HStack(spacing: 0) {
+                navStat(Date().addingTimeInterval(navigation.remainingTime).formatted(date: .omitted, time: .shortened), "arrivo")
+                navStat(Geo.formatDuration(navigation.remainingTime), "tempo")
+                navStat(Geo.formatKm(navigation.remainingDistance), "distanza")
+                Button(action: endNavigation) {
+                    Text("Fine")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 22)
+                        .padding(.vertical, 12)
+                        .background(Color.red, in: Capsule())
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .shadow(radius: 6)
+        }
+        .padding()
+        .animation(.easeInOut(duration: 0.2), value: tracker.onOldRoad)
+    }
+
+    private func navStat(_ value: String, _ label: String) -> some View {
+        VStack(spacing: 2) {
+            Text(value).font(.headline).lineLimit(1).minimumScaleFactor(0.7)
+            Text(label).font(.caption).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func startNavigation() {
+        guard let route = planner.current, let destination = planner.destination else { return }
+        if tracker.isRecording {
+            navigation.startedRecording = false
+        } else {
+            tracker.start()
+            navigation.startedRecording = true
+        }
+        navigation.start(route: route, destination: destination, mode: planner.mode)
+        planner.clear()
+        follow = true
+    }
+
+    private func endNavigation() {
+        let destination = navigation.destination
+        let startedRecording = navigation.startedRecording
+        navigation.stop()
+        tracker.navigationInfo = nil
+        place = nil
+        if startedRecording && tracker.isRecording && !tracker.isAutomatic {
+            tracker.stop(name: destination.map { "Verso \($0.name)" }, keep: true)
         }
     }
 
@@ -266,6 +389,12 @@ struct ContentView: View {
 
     private var routeCard: some View {
         VStack(spacing: 10) {
+            if let origin = planner.origin, let dest = planner.destination {
+                Text("\(origin.name) → \(dest.name)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
             if planner.isLoading {
                 ProgressView("Cerco il percorso con più strade nuove…")
             } else if let r = planner.current {
@@ -290,39 +419,36 @@ struct ContentView: View {
                 }
                 .font(.title3)
             }
-            HStack {
-                Button {
-                    openInMaps()
-                } label: {
-                    Label("Naviga con Mappe", systemImage: "location.north.line.fill")
+            HStack(spacing: 12) {
+                Button("Chiudi") {
+                    planner.clear()
+                    place = nil
                 }
-                .disabled(planner.destination == nil)
+                .font(.subheadline)
                 Spacer()
-                Button("Chiudi") { planner.clear() }
+                Button(action: startNavigation) {
+                    Label("Avvia", systemImage: "location.north.fill")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 28)
+                        .padding(.vertical, 12)
+                        .background(planner.current == nil ? Color.gray : Color.green, in: Capsule())
+                }
+                .disabled(planner.current == nil)
             }
-            .font(.subheadline)
         }
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
         .shadow(radius: 4)
     }
 
-    private func planRoute(to place: Place) {
-        guard let start = mapState.userLocation ?? tracker.currentLocation?.coordinate else {
+    /// `from` nil = parti dalla posizione attuale.
+    private func planRoute(to place: Place, from origin: Place? = nil, mode routeMode: TravelMode? = nil) {
+        guard let start = origin?.coordinate ?? mapState.userLocation ?? tracker.currentLocation?.coordinate else {
             info = "Posizione attuale non disponibile."
             return
         }
-        planner.plan(from: start, to: place, mode: mode, index: store.index)
-    }
-
-    private func openInMaps() {
-        guard let dest = planner.destination else { return }
-        let item = MKMapItem(placemark: MKPlacemark(coordinate: dest.coordinate))
-        item.name = dest.name
-        item.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: mode == .car ? MKLaunchOptionsDirectionsModeDriving
-                                                           : MKLaunchOptionsDirectionsModeWalking,
-        ])
+        planner.plan(from: start, origin: origin, to: place, mode: routeMode ?? mode, index: store.index)
     }
 
     // MARK: - Strade nuove
@@ -387,6 +513,9 @@ struct ContentView: View {
                 let p = Place(name: parts[2], coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon))
                 place = p
                 DispatchQueue.main.asyncAfter(deadline: .now() + 4) { planRoute(to: p) }
+                if args.contains("-navigate") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 12) { startNavigation() }
+                }
             }
         }
         #endif

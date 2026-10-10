@@ -16,6 +16,7 @@ struct TripsView: View {
     @AppStorage(Settings.modeFilter) private var modeFilter = ""
     @AppStorage(Settings.voiceAlert) private var voiceAlert = 1
     @AppStorage(Settings.autoRecord) private var autoRecord = false
+    @AppStorage(Settings.navigationVoice) private var navigationVoice = true
 
     private enum FileAction { case importGPX, restore, chooseFolder }
     @State private var fileAction: FileAction?
@@ -72,6 +73,7 @@ struct TripsView: View {
                         Text("Con cuffie o CarPlay").tag(1)
                         Text("Sempre").tag(2)
                     }
+                    Toggle("Guida vocale in navigazione", isOn: $navigationVoice)
                 }
 
                 Section {

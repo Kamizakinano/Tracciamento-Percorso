@@ -30,7 +30,7 @@ final class LiveActivityManager {
     /// Aggiorna al massimo ogni 10 secondi, subito se cambia l'avviso.
     func update(_ state: TripActivityAttributes.ContentState) {
         guard let activity, state != lastState else { return }
-        let urgent = state.onOldRoad != lastState?.onOldRoad
+        let urgent = state.onOldRoad != lastState?.onOldRoad || state.instruction != lastState?.instruction
         guard urgent || Date().timeIntervalSince(lastUpdate) >= 10 else { return }
         lastState = state
         lastUpdate = Date()

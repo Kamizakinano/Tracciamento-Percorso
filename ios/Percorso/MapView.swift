@@ -13,6 +13,8 @@ struct MapView: UIViewRepresentable {
     let route: RouteOption?
     let mapType: MKMapType
     let place: Place?
+    /// Navigazione in corso: mappa inclinata che segue la direzione di marcia.
+    var navigating = false
     @Binding var follow: Bool
     @Binding var focus: Trip?
     /// Regione da mostrare (per esempio quando si attivano le strade nuove).
@@ -31,6 +33,8 @@ struct MapView: UIViewRepresentable {
         map.showsUserLocation = true
         map.showsCompass = true
         map.showsScale = true
+        map.showsTraffic = true
+        map.showsBuildings = true
         // Lascia spazio ai pulsanti sopra e sotto la mappa.
         map.layoutMargins = UIEdgeInsets(top: 60, left: 8, bottom: 90, right: 70)
         return map
@@ -40,7 +44,23 @@ struct MapView: UIViewRepresentable {
         let c = context.coordinator
         c.parent = self
 
-        if map.mapType != mapType { map.mapType = mapType }
+        // In navigazione la mappa standard diventa più tenue, così il percorso risalta.
+        let type: MKMapType = navigating && mapType == .standard ? .mutedStandard : mapType
+        if map.mapType != type { map.mapType = type }
+
+        if c.wasNavigating != navigating {
+            c.wasNavigating = navigating
+            c.programmaticChange = true
+            let camera = map.camera.copy() as! MKMapCamera
+            camera.pitch = navigating ? 55 : 0
+            if navigating, let user = map.userLocation.location {
+                camera.centerCoordinate = user.coordinate
+                camera.centerCoordinateDistance = 700
+            }
+            map.setCamera(camera, animated: false)
+            map.setUserTrackingMode(navigating ? .followWithHeading : (follow ? .follow : .none), animated: true)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { c.programmaticChange = false }
+        }
 
         let historyKey = "\(historyVersion)-\(showHistory)"
         if c.historyKey != historyKey {
@@ -84,10 +104,12 @@ struct MapView: UIViewRepresentable {
                 line.title = Coordinator.route
                 map.addOverlay(line, level: .aboveLabels)
                 c.routeOverlay = line
-                map.setUserTrackingMode(.none, animated: false)
-                Self.fit(map, coords: route.coords)
-                DispatchQueue.main.async { follow = false }
-                return
+                if !navigating {
+                    map.setUserTrackingMode(.none, animated: false)
+                    Self.fit(map, coords: route.coords)
+                    DispatchQueue.main.async { follow = false }
+                    return
+                }
             }
         }
 
@@ -113,8 +135,10 @@ struct MapView: UIViewRepresentable {
                 pin.coordinate = place.coordinate
                 pin.title = place.name
                 map.addAnnotation(pin)
-                map.selectAnnotation(pin, animated: true)
                 c.placeAnnotation = pin
+            }
+            if let place, !navigating {
+                map.selectAnnotation(c.placeAnnotation!, animated: true)
                 map.setUserTrackingMode(.none, animated: false)
                 map.setRegion(MKCoordinateRegion(center: place.coordinate, latitudinalMeters: 1500, longitudinalMeters: 1500),
                               animated: true)
@@ -141,8 +165,12 @@ struct MapView: UIViewRepresentable {
                 focus = nil
             }
         } else {
-            let mode: MKUserTrackingMode = follow ? .follow : .none
-            if map.userTrackingMode != mode { map.setUserTrackingMode(mode, animated: true) }
+            let mode: MKUserTrackingMode = follow ? (navigating ? .followWithHeading : .follow) : .none
+            if map.userTrackingMode != mode {
+                c.programmaticChange = true
+                map.setUserTrackingMode(mode, animated: true)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1) { c.programmaticChange = false }
+            }
         }
     }
 
@@ -173,6 +201,9 @@ struct MapView: UIViewRepresentable {
         var currentCount = -1
         var placeID: UUID?
         var placeAnnotation: MKPointAnnotation?
+        var wasNavigating = false
+        /// Cambi di inquadratura fatti dall'app (non dall'utente).
+        var programmaticChange = false
 
         init(_ parent: MapView) { self.parent = parent }
 
@@ -208,7 +239,7 @@ struct MapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, didChange mode: MKUserTrackingMode, animated: Bool) {
             // L'utente ha spostato la mappa a mano: smetti di seguirlo.
-            if mode == .none && parent.follow {
+            if mode == .none && parent.follow && !programmaticChange {
                 DispatchQueue.main.async { self.parent.follow = false }
             }
         }

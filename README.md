@@ -18,11 +18,17 @@ Così durante i viaggi puoi scegliere strade nuove.
 - **Strade nuove vicino a te** (pulsante ✨): scarica le strade della zona da
   OpenStreetMap e mostra in verde tratteggiato quelle che non hai mai fatto.
   Si aggiorna quando sposti la mappa.
-- **Percorso con più strade nuove**: cerca un indirizzo, tocca l'icona viola
-  accanto al nome. L'app confronta i percorsi di Apple più due varianti e
-  propone (in viola) quello con più strade nuove senza allungare troppo;
-  con ‹ › vedi le alternative. "Naviga con Mappe" apre la navigazione verso la
-  destinazione (Mappe calcola il suo percorso).
+- **Ricerca "Dove vuoi andare?"** (lente): partenza (di solito "La mia
+  posizione") e destinazione, suggerimenti vicini a te, luoghi recenti, scambio
+  ⇅ e scelta del mezzo. Scelta la destinazione, l'app calcola i percorsi.
+- **Percorso con più strade nuove**: l'app confronta i percorsi di Apple più due
+  varianti e propone (in viola) quello con più strade nuove senza allungare
+  troppo; con ‹ › vedi le alternative.
+- **Navigazione nell'app** (Avvia): prossima svolta con freccia e distanza,
+  guida vocale in italiano, mappa 3D che ruota con la direzione, orario di
+  arrivo, tempo e km rimanenti, ricalcolo automatico se esci dal percorso.
+  La svolta compare anche nella Live Activity sul blocco schermo; il viaggio
+  viene registrato e salvato come "Verso <destinazione>".
 - **Mezzo**: auto, bici, a piedi o rilevamento automatico dalla velocità.
   Cambia la distanza di avviso (25 / 18 / 12 m), la precisione del GPS e le
   strade proposte.
@@ -86,7 +92,8 @@ era rimasta.
 | `ios/Percorso/TripStore.swift` | Viaggi salvati e indice delle strade già fatte |
 | `ios/Percorso/MapView.swift` | Mappa (Apple Maps) con i percorsi evidenziati |
 | `ios/Percorso/ContentView.swift`, `TripsView.swift` | Interfaccia |
-| `ios/Percorso/SearchView.swift` | Ricerca di indirizzi e luoghi |
+| `ios/Percorso/SearchView.swift` | Ricerca partenza/destinazione |
+| `ios/Percorso/NavigationSession.swift` | Navigazione svolta per svolta |
 | `ios/Percorso/GPX.swift` | Import/export GPX |
 | `ios/Percorso/ExploreService.swift` | Strade nuove da OpenStreetMap |
 | `ios/Percorso/RoutePlanner.swift` | Percorso con più strade nuove |

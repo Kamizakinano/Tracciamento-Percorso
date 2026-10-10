@@ -1,12 +1,21 @@
 import Foundation
 import MapKit
 
+/// Una svolta del percorso: l'indicazione vale per il punto iniziale del tratto.
+struct RouteStep {
+    let instruction: String
+    /// Lunghezza del tratto che segue la svolta (metri).
+    let distance: Double
+    let coords: [CLLocationCoordinate2D]
+}
+
 /// Un percorso proposto verso la destinazione.
 struct RouteOption: Identifiable {
     let id = UUID()
     let coords: [CLLocationCoordinate2D]
     let distance: Double
     let time: TimeInterval
+    var steps: [RouteStep] = []
     /// Frazione del percorso su strade mai fatte (0...1).
     var newFraction: Double = 1
     var score: Double = 0
@@ -20,6 +29,8 @@ final class RoutePlanner: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var message: String?
     @Published private(set) var destination: Place?
+    @Published private(set) var origin: Place?
+    @Published private(set) var mode: TravelMode = .car
 
     private var task: Task<Void, Never>?
 
@@ -30,13 +41,17 @@ final class RoutePlanner: ObservableObject {
         options = []
         selected = 0
         destination = nil
+        origin = nil
         message = nil
         isLoading = false
     }
 
-    func plan(from start: CLLocationCoordinate2D, to place: Place, mode: TravelMode, index: SpatialIndex) {
+    /// `origin` nil = parti dalla posizione attuale (`start`).
+    func plan(from start: CLLocationCoordinate2D, origin: Place? = nil, to place: Place, mode: TravelMode, index: SpatialIndex) {
         clear()
         destination = place
+        self.origin = origin
+        self.mode = mode
         isLoading = true
         task = Task {
             let routes = await Self.candidates(from: start, to: place.coordinate, mode: mode)
@@ -105,15 +120,22 @@ final class RoutePlanner: ObservableObject {
             let first = await directions(a, via, mode: mode, alternatives: false)
             let second = await directions(via, b, mode: mode, alternatives: false)
             guard let r1 = first.first, let r2 = second.first else { continue }
+            // Il primo tratto finisce con "sei arrivato" (al punto intermedio) e il secondo
+            // comincia con un passo vuoto: si tolgono per unire le indicazioni.
             result.append(RouteOption(coords: coordinates(of: r1.polyline) + coordinates(of: r2.polyline).dropFirst(),
                                       distance: r1.distance + r2.distance,
-                                      time: r1.expectedTravelTime + r2.expectedTravelTime))
+                                      time: r1.expectedTravelTime + r2.expectedTravelTime,
+                                      steps: Array(steps(of: r1).dropLast()) + steps(of: r2).drop(while: { $0.instruction.isEmpty })))
         }
         return result
     }
 
     private static func option(_ r: MKRoute) -> RouteOption {
-        RouteOption(coords: coordinates(of: r.polyline), distance: r.distance, time: r.expectedTravelTime)
+        RouteOption(coords: coordinates(of: r.polyline), distance: r.distance, time: r.expectedTravelTime, steps: steps(of: r))
+    }
+
+    private static func steps(of r: MKRoute) -> [RouteStep] {
+        r.steps.map { RouteStep(instruction: $0.instructions, distance: $0.distance, coords: coordinates(of: $0.polyline)) }
     }
 
     static func coordinates(of polyline: MKPolyline) -> [CLLocationCoordinate2D] {

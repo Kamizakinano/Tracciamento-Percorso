@@ -204,4 +204,72 @@ final class PercorsoTests: XCTestCase {
         XCTAssertEqual(s.byMode.map(\.mode), [.car, .bike])
         XCTAssertEqual(TripStats.compute([again, first], since: Date(timeIntervalSince1970: 1500)).trips, 1)
     }
+
+    // MARK: - Navigazione
+
+    /// Percorso a L: 1 km verso est, poi svolta a sinistra e 500 m verso nord.
+    private func lRoute() -> (RouteOption, Place) {
+        let a = CLLocationCoordinate2D(latitude: 45.0, longitude: 9.0)
+        let corner = CLLocationCoordinate2D(latitude: 45.0, longitude: 9.0127)
+        let end = CLLocationCoordinate2D(latitude: 45.0045, longitude: 9.0127)
+        let steps = [
+            RouteStep(instruction: "", distance: 0, coords: [a]),
+            RouteStep(instruction: "Prosegui su Via Roma", distance: 1000, coords: [a, corner]),
+            RouteStep(instruction: "Svolta a sinistra in Via Verdi", distance: 500, coords: [corner, end]),
+            RouteStep(instruction: "La destinazione è sulla destra", distance: 0, coords: [end]),
+        ]
+        return (RouteOption(coords: [a, corner, end], distance: 1500, time: 180, steps: steps),
+                Place(name: "Arrivo", coordinate: end))
+    }
+
+    private func location(_ lat: Double, _ lon: Double) -> CLLocation {
+        CLLocation(coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon), altitude: 0,
+                   horizontalAccuracy: 5, verticalAccuracy: 5, timestamp: Date())
+    }
+
+    func testNavigationFollowsSteps() {
+        let (route, dest) = lRoute()
+        let nav = NavigationSession(store: nil)
+        nav.voiceEnabled = false
+        nav.start(route: route, destination: dest, mode: .car)
+        XCTAssertEqual(nav.stepIndex, 1, "il primo passo vuoto viene saltato")
+
+        nav.update(location(45.0, 9.0001)) // alla partenza
+        XCTAssertEqual(nav.instruction, "Svolta a sinistra in Via Verdi")
+        XCTAssertEqual(nav.maneuverIcon, "arrow.turn.up.left")
+        XCTAssertEqual(nav.distanceToManeuver, 990, accuracy: 15)
+        XCTAssertEqual(nav.remainingDistance, 1490, accuracy: 20)
+
+        nav.update(location(45.0, 9.0126)) // all'incrocio
+        XCTAssertEqual(nav.instruction, "La destinazione è sulla destra")
+
+        nav.update(location(45.0044, 9.0127)) // a 10 m dall'arrivo
+        XCTAssertTrue(nav.arrived)
+        XCTAssertEqual(nav.remainingDistance, 0)
+    }
+
+    func testNavigationReroutesWhenOffRoute() {
+        let (route, dest) = lRoute()
+        let nav = NavigationSession(store: nil)
+        nav.voiceEnabled = false
+        var reroutes = 0
+        nav.rerouteHandler = { _ in reroutes += 1 }
+        nav.start(route: route, destination: dest, mode: .car)
+        nav.update(location(45.0002, 9.005)) // 22 m dal percorso: ancora sopra
+        XCTAssertEqual(reroutes, 0)
+        for _ in 0..<3 { nav.update(location(45.002, 9.005)) } // 220 m fuori
+        XCTAssertEqual(reroutes, 1)
+    }
+
+    func testDistanceToPolylineAndFormatting() {
+        let line = [CLLocationCoordinate2D(latitude: 45, longitude: 9), CLLocationCoordinate2D(latitude: 45, longitude: 9.01)]
+        XCTAssertEqual(Geo.distance(from: CLLocationCoordinate2D(latitude: 45.001, longitude: 9.005), toPolyline: line), 111, accuracy: 2)
+        XCTAssertEqual(Geo.distance(from: CLLocationCoordinate2D(latitude: 45, longitude: 8.99), toPolyline: line), 786, accuracy: 10)
+        XCTAssertEqual(Geo.formatShort(43), "40 m")
+        XCTAssertEqual(Geo.formatShort(237), "250 m")
+        XCTAssertTrue(Geo.formatShort(1240).hasPrefix("1"))
+        XCTAssertEqual(NavigationSession.icon(for: "Alla rotonda prendi la seconda uscita"), "arrow.triangle.turn.up.right.circle")
+        XCTAssertEqual(NavigationSession.icon(for: "Turn right onto Main St"), "arrow.turn.up.right")
+        XCTAssertEqual(NavigationSession.icon(for: "Prosegui dritto"), "arrow.up")
+    }
 }

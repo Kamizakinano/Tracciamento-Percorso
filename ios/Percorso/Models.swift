@@ -117,6 +117,7 @@ enum Settings {
     static let autoRecord = "autoRecord"
     static let voiceAlert = "voiceAlert"       // 0 mai, 1 cuffie/CarPlay, 2 sempre
     static let mapStyle = "mapStyle"
+    static let navigationVoice = "navigationVoice"
 
     private static var d: UserDefaults { .standard }
 
@@ -124,6 +125,7 @@ enum Settings {
     static var autoRecordOn: Bool { d.bool(forKey: autoRecord) }
     static var fixedMode: TravelMode? { TravelMode(rawValue: d.string(forKey: travelMode) ?? "") }
     static var voiceMode: Int { d.object(forKey: voiceAlert) as? Int ?? 1 }
+    static var navigationVoiceOn: Bool { d.object(forKey: navigationVoice) as? Bool ?? true }
 
     static func threshold(for mode: TravelMode) -> Double {
         let v = d.double(forKey: threshold)
@@ -207,6 +209,36 @@ enum Geo {
         guard !samples.isEmpty else { return 1 }
         let new = samples.filter { !index.isNear($0, within: meters) }.count
         return Double(new) / Double(samples.count)
+    }
+
+    /// Distanza (metri) da un punto a una linea spezzata, in proiezione locale.
+    static func distance(from p: CLLocationCoordinate2D, toPolyline coords: [CLLocationCoordinate2D]) -> Double {
+        guard let first = coords.first else { return .infinity }
+        guard coords.count > 1 else { return distance(p, first) }
+        let mLat = 111_195.0
+        let mLon = 111_195.0 * cos(p.latitude * .pi / 180)
+        func xy(_ c: CLLocationCoordinate2D) -> (Double, Double) {
+            ((c.longitude - p.longitude) * mLon, (c.latitude - p.latitude) * mLat)
+        }
+        var best = Double.infinity
+        for i in 1..<coords.count {
+            let (ax, ay) = xy(coords[i - 1]), (bx, by) = xy(coords[i])
+            let dx = bx - ax, dy = by - ay
+            let len2 = dx * dx + dy * dy
+            let t = len2 > 0 ? max(0, min(1, -(ax * dx + ay * dy) / len2)) : 0
+            let x = ax + t * dx, y = ay + t * dy
+            best = min(best, sqrt(x * x + y * y))
+        }
+        return best
+    }
+
+    /// "250 m" oppure "1,2 km" (per le indicazioni di navigazione).
+    static func formatShort(_ meters: Double) -> String {
+        if meters < 1000 {
+            let rounded = meters < 100 ? (meters / 10).rounded() * 10 : (meters / 50).rounded() * 50
+            return "\(Int(max(0, rounded))) m"
+        }
+        return (meters / 1000).formatted(.number.precision(.fractionLength(1))) + " km"
     }
 
     static func formatKm(_ meters: Double) -> String {

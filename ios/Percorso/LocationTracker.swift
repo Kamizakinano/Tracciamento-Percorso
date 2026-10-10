@@ -44,6 +44,11 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     var currentLocation: CLLocation? { manager.location }
+
+    /// Riceve ogni posizione valida (usato dalla navigazione).
+    var onLocation: ((CLLocation) -> Void)?
+    /// Prossima svolta da mostrare nella Live Activity durante la navigazione.
+    var navigationInfo: (instruction: String, distance: Double, icon: String)?
     var authorization: CLAuthorizationStatus { manager.authorizationStatus }
 
     init(store: TripStore) {
@@ -271,6 +276,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             guard loc.horizontalAccuracy >= 0, loc.horizontalAccuracy <= maxAccuracy,
                   loc.timestamp.timeIntervalSinceNow > -30 else { continue }
             updateMode(speed: loc.speed)
+            onLocation?(loc)
             let p = TrackPoint(loc)
             if isAutomatic, let last = points.last, Self.shouldSplit(last: last, next: p) {
                 finishAutoSegment()
@@ -347,7 +353,10 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
 
     private var activityState: TripActivityAttributes.ContentState {
         TripActivityAttributes.ContentState(distance: distance, newPercent: newPercent,
-                                            onOldRoad: onOldRoad, modeIcon: currentMode.icon)
+                                            onOldRoad: onOldRoad, modeIcon: currentMode.icon,
+                                            instruction: navigationInfo?.instruction,
+                                            maneuverDistance: navigationInfo?.distance,
+                                            maneuverIcon: navigationInfo?.icon)
     }
 
     private func startLiveActivity() {
