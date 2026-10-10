@@ -6,26 +6,41 @@ Così durante i viaggi puoi scegliere strade nuove.
 
 ## Funzioni
 
-- **Avvia / Ferma**: registra il viaggio in corso (linea blu). Alla fine puoi
-  dargli un nome, salvarlo o scartarlo.
-- **Strade già percorse**: tutti i viaggi salvati sono disegnati in arancione;
-  le strade fatte più volte risultano più intense.
-- **Avviso**: se passi su una strada già fatta compare il banner
-  "⚠️ Strada già percorsa" con vibrazione. Con l'app in background arriva una
-  notifica (al massimo una al minuto). La distanza di avviso (15 / 25 / 40 m)
-  è regolabile.
-- **Tipo di mappa** (pulsante a destra con i livelli): standard, satellite con
-  nomi delle strade, oppure solo satellite.
-- **Ricerca indirizzo** (lente): suggerimenti mentre scrivi; il luogo scelto
-  viene mostrato con un segnaposto rosso (tocca ✕ per toglierlo).
-- **Nuove %**: quanta parte del viaggio attuale è su strade mai fatte.
-- **Elenco viaggi**: zoom su un viaggio, eliminazione (scorri a sinistra),
-  esportazione e importazione **GPX** (anche da Strava, Komoot, ecc.).
-- I dati restano **solo sul telefono**, in `trips.json`, visibile anche
-  dall'app File (*Sul mio iPhone → Percorso*). Esporta il GPX ogni tanto come
-  backup.
-- Se l'app viene chiusa durante un viaggio, alla riapertura la registrazione
-  riprende.
+- **Avvia / Ferma**: registra un viaggio (linea blu). Alla fine puoi dargli un
+  nome, salvarlo o scartarlo.
+- **Registra sempre** (impostazioni): registrazione automatica senza premere
+  Avvia, anche con l'app chiusa. Ogni spostamento diventa un viaggio (si chiude
+  dopo 5 minuti fermo, a un salto di 2 km o a mezzanotte). Serve il permesso di
+  posizione **"Sempre"**; quando sei fermo iOS sospende il GPS per risparmiare
+  batteria.
+- **Colori per frequenza**: giallo = strada fatta 1 volta, arancione = 2-3
+  volte, rosso = 4 o più.
+- **Strade nuove vicino a te** (pulsante ✨): scarica le strade della zona da
+  OpenStreetMap e mostra in verde tratteggiato quelle che non hai mai fatto.
+  Si aggiorna quando sposti la mappa.
+- **Percorso con più strade nuove**: cerca un indirizzo, tocca l'icona viola
+  accanto al nome. L'app confronta i percorsi di Apple più due varianti e
+  propone (in viola) quello con più strade nuove senza allungare troppo;
+  con ‹ › vedi le alternative. "Naviga con Mappe" apre la navigazione verso la
+  destinazione (Mappe calcola il suo percorso).
+- **Mezzo**: auto, bici, a piedi o rilevamento automatico dalla velocità.
+  Cambia la distanza di avviso (25 / 18 / 12 m), la precisione del GPS e le
+  strade proposte.
+- **Filtri**: considera solo i viaggi degli ultimi 12 / 6 mesi / 30 giorni e/o
+  di un solo mezzo (vale per mappa e avvisi).
+- **Avvisi**: banner e vibrazione con l'app aperta, notifica in background,
+  **avviso vocale** "Strada già percorsa" (mai / solo con cuffie o CarPlay /
+  sempre).
+- **Live Activity** sul blocco schermo e nella Dynamic Island durante la
+  registrazione: km, tempo, % di strade nuove e avviso. iOS permette di
+  avviarla solo con l'app aperta.
+- **Statistiche**: km, tempo, km su strade nuove, divisione per mezzo, zone più
+  esplorate, per settimana / mese / anno / sempre.
+- **Backup automatico**: scegli una cartella (per esempio in iCloud Drive) e a
+  ogni viaggio salvato viene aggiornato `Percorso-backup.json`; "Ripristina da
+  backup" lo ricarica. Funziona anche con un Apple ID gratuito.
+- **Mappa**: standard, satellite con strade o solo satellite; ricerca di
+  indirizzi; import/export **GPX**.
 
 ## Installazione con Sideloadly
 
@@ -68,6 +83,12 @@ era rimasta.
 | `ios/Percorso/ContentView.swift`, `TripsView.swift` | Interfaccia |
 | `ios/Percorso/SearchView.swift` | Ricerca di indirizzi e luoghi |
 | `ios/Percorso/GPX.swift` | Import/export GPX |
+| `ios/Percorso/ExploreService.swift` | Strade nuove da OpenStreetMap |
+| `ios/Percorso/RoutePlanner.swift` | Percorso con più strade nuove |
+| `ios/Percorso/StatsView.swift` | Statistiche |
+| `ios/Percorso/BackupManager.swift` | Backup automatico |
+| `ios/Percorso/VoiceAlert.swift`, `LiveActivityManager.swift` | Avviso vocale e Live Activity |
+| `ios/LiveActivity/`, `ios/Shared/` | Estensione che disegna la Live Activity |
 | `.github/workflows/ios.yml` | Compilazione dell'`.ipa` |
 | `web/` | Prima versione come web app (senza background) |
 

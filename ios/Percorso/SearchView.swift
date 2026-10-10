@@ -16,10 +16,14 @@ final class SearchCompleter: NSObject, ObservableObject, MKLocalSearchCompleterD
 
     private let completer = MKLocalSearchCompleter()
 
-    override init() {
+    init(query: String = "") {
         super.init()
         completer.delegate = self
         completer.resultTypes = [.address, .pointOfInterest]
+        if !query.isEmpty {
+            self.query = query // didSet non scatta dentro init: imposta il frammento a mano
+            completer.queryFragment = query
+        }
     }
 
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
@@ -33,12 +37,16 @@ final class SearchCompleter: NSObject, ObservableObject, MKLocalSearchCompleterD
 
 struct SearchView: View {
     let onSelect: (Place) -> Void
-    var initialQuery = ""
 
-    @StateObject private var completer = SearchCompleter()
+    @StateObject private var completer: SearchCompleter
     @Environment(\.dismiss) private var dismiss
     @State private var searching = false
     @State private var message: String?
+
+    init(onSelect: @escaping (Place) -> Void, initialQuery: String = "") {
+        self.onSelect = onSelect
+        _completer = StateObject(wrappedValue: SearchCompleter(query: initialQuery))
+    }
 
     var body: some View {
         NavigationStack {
@@ -71,9 +79,6 @@ struct SearchView: View {
                 let request = MKLocalSearch.Request()
                 request.naturalLanguageQuery = completer.query
                 run(request)
-            }
-            .onAppear {
-                if !initialQuery.isEmpty { completer.query = initialQuery }
             }
             .navigationTitle("Cerca")
             .navigationBarTitleDisplayMode(.inline)

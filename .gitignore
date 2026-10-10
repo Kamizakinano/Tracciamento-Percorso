@@ -8,3 +8,4 @@ ios/Payload/
 xcuserdata/
 ios/build-test/
 ios/screenshots/
+ios/LiveActivity/Info.plist

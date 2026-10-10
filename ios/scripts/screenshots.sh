@@ -47,6 +47,11 @@ map_style 1
 shot 3-satellite
 map_style 0
 
-shot 4-viaggi -showTrips
-shot 5-ricerca -search "Duomo di Milano"
+shot 4-strade-nuove -explore
+sleep 15 && xcrun simctl io "$UDID" screenshot "$OUT/4-strade-nuove.png"  # attende OpenStreetMap
+shot 5-percorso -routeTo "45.4859,9.2048,Stazione Centrale"
+sleep 10 && xcrun simctl io "$UDID" screenshot "$OUT/5-percorso.png"     # attende i percorsi di Apple
+shot 6-statistiche -stats
+shot 7-impostazioni -showTrips
+shot 8-ricerca -search "Duomo di Milano"
 stop_app

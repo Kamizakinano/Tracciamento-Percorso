@@ -4,13 +4,22 @@ name: Percorso
 options:
   bundleIdPrefix: com.kamizakinano
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "16.2"
+settings:
+  base:
+    MARKETING_VERSION: "1.1"
+    CURRENT_PROJECT_VERSION: "2"
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
 targets:
   Percorso:
     type: application
     platform: iOS
     sources:
       - Percorso
+      - Shared
+    dependencies:
+      - target: PercorsoLiveActivity
     info:
       path: Percorso/Info.plist
       properties:
@@ -25,18 +34,34 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         UIBackgroundModes:
           - location
+          - audio
+        NSSupportsLiveActivities: true
         NSLocationWhenInUseUsageDescription: Serve la posizione per registrare il percorso e avvisarti quando passi su strade già fatte.
-        NSLocationAlwaysAndWhenInUseUsageDescription: Serve la posizione anche in background per continuare a registrare il viaggio a schermo spento.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Con "Sempre" l'app registra i tuoi spostamenti da sola, anche senza aprirla, e colora le strade che hai fatto.
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.kamizakinano.percorso
-        MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "1"
-        TARGETED_DEVICE_FAMILY: "1"
-        SWIFT_VERSION: "5.0"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+  PercorsoLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - LiveActivity
+      - Shared
+    info:
+      path: LiveActivity/Info.plist
+      properties:
+        CFBundleDisplayName: Percorso
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kamizakinano.percorso.LiveActivity
+        SKIP_INSTALL: YES
   PercorsoTests:
     type: bundle.unit-test
     platform: iOS
@@ -47,7 +72,6 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        SWIFT_VERSION: "5.0"
 schemes:
   Percorso:
     build:

@@ -6,12 +6,13 @@ import json, math, os, sys, time, urllib.request, uuid
 OUT = sys.argv[1]
 APPLE_EPOCH = 978307200  # le Date di Swift sono secondi dal 2001-01-01
 
+# (nome, partenza, arrivo, quante volte è stato percorso, mezzo)
 ROUTES = [
-    ("Duomo → Stazione Centrale", (45.4642, 9.1900), (45.4859, 9.2048)),
-    ("Castello → Porta Romana", (45.4705, 9.1795), (45.4515, 9.2030)),
-    ("Navigli → Città Studi", (45.4520, 9.1735), (45.4780, 9.2270)),
+    ("Duomo → Stazione Centrale", (45.4642, 9.1900), (45.4859, 9.2048), 4, "car"),
+    ("Castello → Porta Romana", (45.4705, 9.1795), (45.4515, 9.2030), 2, "bike"),
+    ("Navigli → Città Studi", (45.4520, 9.1735), (45.4780, 9.2270), 1, "car"),
+    ("Giro a Brera", (45.4720, 9.1880), (45.4770, 9.1830), 1, "foot"),
 ]
-
 
 def osrm(a, b):
     url = ("https://router.project-osrm.org/route/v1/driving/"
@@ -31,18 +32,26 @@ def points(coords, start):
 
 os.makedirs(OUT, exist_ok=True)
 now = time.time()
-trips, first = [], None
-for day, (name, a, b) in enumerate(ROUTES, start=1):
+trips, first, day = [], None, 0
+for name, a, b, times, mode in ROUTES:
     try:
         coords = osrm(a, b)
     except Exception as e:  # senza rete: linea retta
         print(f"OSRM non disponibile ({e}), uso una linea retta", file=sys.stderr)
         coords = straight(a, b)
     first = first or coords
-    start = now - day * 86400
-    trips.append({"id": str(uuid.uuid4()).upper(), "name": name,
-                  "start": start - APPLE_EPOCH, "end": start - APPLE_EPOCH + len(coords) * 4,
-                  "points": points(coords, start)})
+    step = {"car": 4, "bike": 9, "foot": 20}[mode]  # secondi tra un punto e l'altro
+    for n in range(times):
+        day += 1
+        start = now - day * 86400
+        trips.append({"id": str(uuid.uuid4()).upper(), "name": name if n == 0 else None,
+                      "start": start - APPLE_EPOCH, "end": start - APPLE_EPOCH + len(coords) * step,
+                      "points": [{"lat": lat, "lon": lon, "time": start - APPLE_EPOCH + i * step}
+                                 for i, (lat, lon) in enumerate(coords)],
+                      "mode": mode, "automatic": n > 0, "newFraction": 1.0 if n == 0 else 0.0,
+                      "locality": "Milano"})
+trips.sort(key=lambda t: t["start"])
+trips = [{k: v for k, v in t.items() if v is not None} for t in trips]
 
 with open(f"{OUT}/trips.json", "w") as f:
     json.dump(trips, f)
