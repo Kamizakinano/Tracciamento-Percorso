@@ -14,8 +14,9 @@ final class ExploreService: ObservableObject {
     private var task: Task<Void, Never>?
     private var debounce: DispatchWorkItem?
 
-    /// Lato massimo dell'area scaricata (gradi, ~3 km) per non sovraccaricare il servizio.
-    static let maxSpan = 0.03
+    /// Lato massimo dell'area scaricata (gradi, ~1,5-2 km): aree più grandi
+    /// rendono la risposta di Overpass troppo lenta.
+    static let maxSpan = 0.018
     /// Server Overpass: se il primo è sovraccarico si prova il successivo.
     static let endpoints = [
         "https://overpass-api.de/api/interpreter",
@@ -85,9 +86,14 @@ final class ExploreService: ObservableObject {
                 let text = (error as? URLError)?.code == .notConnectedToInternet
                     ? "Strade nuove non disponibili: serve internet."
                     : "Il servizio OpenStreetMap non risponde, riprova tra poco."
+                #if DEBUG
+                let detail = " [\(error)]"
+                #else
+                let detail = ""
+                #endif
                 await MainActor.run {
                     self.isLoading = false
-                    self.message = text
+                    self.message = text + detail
                 }
             }
         }
@@ -113,7 +119,7 @@ final class ExploreService: ObservableObject {
         let w = region.center.longitude - region.span.longitudeDelta / 2
         let e = region.center.longitude + region.span.longitudeDelta / 2
         return """
-        [out:json][timeout:25];
+        [out:json][timeout:40];
         way["highway"~"^(\(highwayTypes(for: mode)))$"](\(s),\(w),\(n),\(e));
         out geom;
         """
@@ -137,7 +143,7 @@ final class ExploreService: ObservableObject {
     private static func download(region: MKCoordinateRegion, mode: TravelMode, from endpoint: URL) async throws -> Data {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 20
+        request.timeoutInterval = 45
         request.setValue("Percorso iOS (uso personale)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         var allowed = CharacterSet.alphanumerics

@@ -33,6 +33,11 @@ jobs:
               "https://$host/api/interpreter" || echo "errore")
             echo "$host -> HTTP $code, $(wc -c < /tmp/op.json) byte"
           done
+          # Stessa richiesta dell'app (auto, centro di Milano, area massima).
+          Q='[out:json][timeout:40];way["highway"~"^(primary|secondary|tertiary|unclassified|residential|living_street|trunk|primary_link|secondary_link|tertiary_link)$"](45.455,9.181,45.473,9.199);out geom;'
+          curl -s -o /tmp/op2.json -w 'Richiesta app: HTTP %{http_code}, %{size_download} byte, %{time_total} s\n' -m 60 \
+            -A 'Percorso iOS (uso personale)' --data-urlencode "data=$Q" https://overpass-api.de/api/interpreter || true
+          head -c 300 /tmp/op2.json; echo
 
       - name: Installa XcodeGen
         run: brew install xcodegen
