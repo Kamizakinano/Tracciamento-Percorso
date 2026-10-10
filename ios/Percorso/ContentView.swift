@@ -585,28 +585,10 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(searchResults) { result in
-                        Button { selectResult(result) } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "bag.circle.fill")
-                                    .font(.title2)
-                                    .foregroundStyle(.indigo)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(result.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                                    if let address = result.address {
-                                        Text(address).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                    }
-                                }
-                                Spacer()
-                                if let d = distanceText(result) {
-                                    Text(d).font(.subheadline).foregroundStyle(.secondary)
-                                }
-                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
-                            }
-                            .padding(.vertical, 8)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        Divider()
+                        resultRow(result)
+                        Rectangle()
+                            .fill(Color(uiColor: .separator))
+                            .frame(height: 1)
                     }
                 }
             }
@@ -615,6 +597,40 @@ struct ContentView: View {
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
         .shadow(radius: 4)
+    }
+
+    private func resultRow(_ result: Place) -> some View {
+        Button { selectResult(result) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: "bag.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.indigo)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(result.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(Color(uiColor: .label))
+                    if let address = result.address, !address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(address)
+                            .font(.caption)
+                            .foregroundColor(Color(uiColor: .secondaryLabel))
+                            .lineLimit(1)
+                    }
+                }
+                Spacer(minLength: 8)
+                if let d = distanceText(result) {
+                    Text(d)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundColor(.indigo)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(Color(uiColor: .tertiaryLabel))
+            }
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private func distanceText(_ place: Place) -> String? {
