@@ -11,6 +11,8 @@ struct MapView: UIViewRepresentable {
     let exploreLines: [[CLLocationCoordinate2D]]
     let exploreVersion: Int
     let route: RouteOption?
+    /// Itinerario con i mezzi pubblici da mostrare (al posto di `route`).
+    var transit: TransitItinerary? = nil
     let mapType: MKMapType
     let place: Place?
     /// Navigazione in corso: mappa inclinata che segue la direzione di marcia.
@@ -113,6 +115,24 @@ struct MapView: UIViewRepresentable {
             }
         }
 
+        if c.transitID != transit?.id {
+            map.removeOverlays(c.transitOverlays)
+            c.transitOverlays = []
+            c.transitID = transit?.id
+            if let transit {
+                for leg in transit.legs where leg.coords.count > 1 {
+                    let line = ColoredPolyline(coordinates: leg.coords, count: leg.coords.count)
+                    line.color = leg.uiColor
+                    line.dashed = leg.isWalk
+                    c.transitOverlays.append(line)
+                }
+                map.addOverlays(c.transitOverlays, level: .aboveLabels)
+                map.setUserTrackingMode(.none, animated: false)
+                Self.fit(map, coords: transit.legs.flatMap(\.coords))
+                DispatchQueue.main.async { follow = false }
+            }
+        }
+
         if c.currentCount != currentPoints.count {
             if let old = c.currentOverlay { map.removeOverlay(old) }
             c.currentOverlay = nil
@@ -198,6 +218,8 @@ struct MapView: UIViewRepresentable {
         var routeID: UUID?
         var routeOverlay: MKOverlay?
         var currentOverlay: MKPolyline?
+        var transitID: UUID?
+        var transitOverlays: [MKOverlay] = []
         var currentCount = -1
         var placeID: UUID?
         var placeAnnotation: MKPointAnnotation?
@@ -221,6 +243,15 @@ struct MapView: UIViewRepresentable {
                     r.strokeColor = MapView.levelColors[min(level, 2)].withAlphaComponent(0.7)
                     r.lineWidth = 9
                 }
+                return r
+            }
+            if let colored = overlay as? ColoredPolyline {
+                let r = MKPolylineRenderer(polyline: colored)
+                r.lineCap = .round
+                r.lineJoin = .round
+                r.strokeColor = colored.color
+                r.lineWidth = colored.dashed ? 4 : 7
+                if colored.dashed { r.lineDashPattern = [2, 8] }
                 return r
             }
             guard let line = overlay as? MKPolyline else { return MKOverlayRenderer(overlay: overlay) }
@@ -252,4 +283,10 @@ struct MapView: UIViewRepresentable {
             parent.onRegionChange(mapView.region)
         }
     }
+}
+
+/// Linea con colore e stile propri (tratti dell'itinerario con i mezzi).
+final class ColoredPolyline: MKPolyline {
+    var color: UIColor = .systemPurple
+    var dashed = false
 }

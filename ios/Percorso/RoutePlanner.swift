@@ -21,6 +21,52 @@ struct RouteOption: Identifiable {
     var score: Double = 0
 }
 
+/// Mezzo scelto nella scheda del percorso (i mezzi pubblici hanno un itinerario a parte).
+enum RouteMode: String, CaseIterable, Identifiable {
+    case car, bike, foot, transit
+
+    var id: String { rawValue }
+
+    init(_ mode: TravelMode) {
+        switch mode {
+        case .car: self = .car
+        case .bike: self = .bike
+        case .foot: self = .foot
+        }
+    }
+
+    var travelMode: TravelMode? {
+        switch self {
+        case .car: return .car
+        case .bike: return .bike
+        case .foot: return .foot
+        case .transit: return nil
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .car: return "car.fill"
+        case .bike: return "bicycle"
+        case .foot: return "figure.walk"
+        case .transit: return "tram.fill"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .car: return "Auto"
+        case .bike: return "Bici"
+        case .foot: return "A piedi"
+        case .transit: return "Mezzi"
+        }
+    }
+}
+
+/// Velocità media in bici (m/s): Apple non fornisce percorsi in bici alle app,
+/// si usa il percorso pedonale con i tempi di una bici (~16 km/h).
+let bikeSpeed = 4.4
+
 /// Calcola percorsi verso una destinazione e propone quello che passa di più
 /// su strade nuove, senza allungare troppo il tragitto.
 final class RoutePlanner: ObservableObject {
@@ -31,6 +77,11 @@ final class RoutePlanner: ObservableObject {
     @Published private(set) var destination: Place?
     @Published private(set) var origin: Place?
     @Published private(set) var mode: TravelMode = .car
+    /// Tempi stimati per ogni mezzo (riga in cima alla scheda del percorso).
+    @Published private(set) var etas: [RouteMode: TimeInterval] = [:]
+    /// Punto di partenza dell'ultimo calcolo (per ricalcolare con un altro mezzo).
+    private(set) var start: CLLocationCoordinate2D?
+    private var etaTask: Task<Void, Never>?
 
     private var task: Task<Void, Never>?
 
@@ -38,17 +89,60 @@ final class RoutePlanner: ObservableObject {
 
     func clear() {
         task?.cancel()
+        etaTask?.cancel()
         options = []
         selected = 0
         destination = nil
         origin = nil
+        start = nil
+        etas = [:]
         message = nil
         isLoading = false
     }
 
+    /// Tempi con auto, bici e a piedi (Apple) e con i mezzi pubblici (Apple, se disponibile).
+    func computeETAs(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D) {
+        etaTask?.cancel()
+        etas = [:]
+        etaTask = Task {
+            async let car = Self.eta(a, b, .automobile)
+            async let walk = Self.eta(a, b, .walking)
+            async let transit = Self.eta(a, b, .transit)
+            let (c, w, t) = await (car, walk, transit)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                if let c { self.etas[.car] = c.time }
+                if let w {
+                    self.etas[.foot] = w.time
+                    self.etas[.bike] = w.distance / bikeSpeed
+                }
+                if let t, self.etas[.transit] == nil { self.etas[.transit] = t.time }
+            }
+        }
+    }
+
+    /// Tempo dei mezzi pubblici calcolato da Transitous (più preciso di quello di Apple).
+    func setTransitETA(_ time: TimeInterval) {
+        etas[.transit] = time
+    }
+
+    private static func eta(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D,
+                            _ type: MKDirectionsTransportType) async -> (time: TimeInterval, distance: Double)? {
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: a))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: b))
+        request.transportType = type
+        guard let r = try? await MKDirections(request: request).calculateETA() else { return nil }
+        return (r.expectedTravelTime, r.distance)
+    }
+
     /// `origin` nil = parti dalla posizione attuale (`start`).
     func plan(from start: CLLocationCoordinate2D, origin: Place? = nil, to place: Place, mode: TravelMode, index: SpatialIndex) {
-        clear()
+        task?.cancel()
+        options = []
+        selected = 0
+        message = nil
+        self.start = start
         destination = place
         self.origin = origin
         self.mode = mode
@@ -110,7 +204,7 @@ final class RoutePlanner: ObservableObject {
 
     /// Percorsi di Apple più due varianti che passano a destra e a sinistra della linea diretta.
     static func candidates(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D, mode: TravelMode) async -> [RouteOption] {
-        var result = await directions(a, b, mode: mode, alternatives: true).map(option)
+        var result = await directions(a, b, mode: mode, alternatives: true).map { option($0, mode: mode) }
         let straight = Geo.distance(a, b)
         guard straight > 300 else { return result }
         let offset = min(3000, max(300, straight * 0.3))
@@ -124,14 +218,16 @@ final class RoutePlanner: ObservableObject {
             // comincia con un passo vuoto: si tolgono per unire le indicazioni.
             result.append(RouteOption(coords: coordinates(of: r1.polyline) + coordinates(of: r2.polyline).dropFirst(),
                                       distance: r1.distance + r2.distance,
-                                      time: r1.expectedTravelTime + r2.expectedTravelTime,
+                                      time: mode == .bike ? (r1.distance + r2.distance) / bikeSpeed
+                                                          : r1.expectedTravelTime + r2.expectedTravelTime,
                                       steps: Array(steps(of: r1).dropLast()) + steps(of: r2).drop(while: { $0.instruction.isEmpty })))
         }
         return result
     }
 
-    private static func option(_ r: MKRoute) -> RouteOption {
-        RouteOption(coords: coordinates(of: r.polyline), distance: r.distance, time: r.expectedTravelTime, steps: steps(of: r))
+    private static func option(_ r: MKRoute, mode: TravelMode) -> RouteOption {
+        RouteOption(coords: coordinates(of: r.polyline), distance: r.distance,
+                    time: mode == .bike ? r.distance / bikeSpeed : r.expectedTravelTime, steps: steps(of: r))
     }
 
     private static func steps(of r: MKRoute) -> [RouteStep] {

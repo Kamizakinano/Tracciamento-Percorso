@@ -1,6 +1,7 @@
 import XCTest
 import CoreLocation
 import MapKit
+import UIKit
 @testable import Percorso
 
 final class PercorsoTests: XCTestCase {
@@ -271,5 +272,59 @@ final class PercorsoTests: XCTestCase {
         XCTAssertEqual(NavigationSession.icon(for: "Alla rotonda prendi la seconda uscita"), "arrow.triangle.turn.up.right.circle")
         XCTAssertEqual(NavigationSession.icon(for: "Turn right onto Main St"), "arrow.turn.up.right")
         XCTAssertEqual(NavigationSession.icon(for: "Prosegui dritto"), "arrow.up")
+    }
+
+    // MARK: - Mezzi pubblici
+
+    func testDecodePolyline() {
+        // Esempio della documentazione Google (precisione 5).
+        let c = TransitPlanner.decodePolyline("_p~iF~ps|U_ulLnnqC_mqNvxq`@", precision: 5)
+        XCTAssertEqual(c.count, 3)
+        XCTAssertEqual(c[0].latitude, 38.5, accuracy: 1e-6)
+        XCTAssertEqual(c[0].longitude, -120.2, accuracy: 1e-6)
+        XCTAssertEqual(c[2].latitude, 43.252, accuracy: 1e-6)
+        XCTAssertEqual(c[2].longitude, -126.453, accuracy: 1e-6)
+    }
+
+    func testParseTransitous() throws {
+        let json = """
+        {"itineraries":[
+          {"duration":900,"startTime":"2026-10-12T08:00:00Z","endTime":"2026-10-12T08:15:00Z","transfers":0,"legs":[
+            {"mode":"WALK","from":{"name":"START","departure":"2026-10-12T08:00:00Z"},"to":{"name":"DUOMO M3","arrival":"2026-10-12T08:04:00Z"},
+             "duration":240,"startTime":"2026-10-12T08:00:00Z","endTime":"2026-10-12T08:04:00Z","distance":231,
+             "legGeometry":{"points":"_p~iF~ps|U_ulLnnqC","precision":5}},
+            {"mode":"SUBWAY","from":{"name":"DUOMO M3"},"to":{"name":"CENTRALE FS"},"duration":420,
+             "startTime":"2026-10-12T08:05:00Z","endTime":"2026-10-12T08:12:00Z","routeShortName":"3","headsign":"COMASINA",
+             "routeColor":"FCC200","intermediateStops":[{"name":"MONTENAPOLEONE"},{"name":"TURATI"},{"name":"REPUBBLICA"}]}
+          ]},
+          {"duration":1500,"startTime":"2026-10-12T08:00:00Z","endTime":"2026-10-12T08:25:00Z","transfers":0,"legs":[
+            {"mode":"WALK","from":{"name":"START"},"to":{"name":"END"},"duration":1500}
+          ]}
+        ],"from":{},"to":{}}
+        """
+        let its = try TransitPlanner.parse(Data(json.utf8))
+        XCTAssertEqual(its.count, 1, "l'itinerario solo a piedi viene scartato")
+        let it = try XCTUnwrap(its.first)
+        XCTAssertEqual(it.duration, 900)
+        XCTAssertEqual(it.legs.count, 2)
+        XCTAssertEqual(it.legs[0].from, "Partenza")
+        XCTAssertTrue(it.legs[0].isWalk)
+        XCTAssertEqual(it.legs[0].coords.count, 2)
+        let metro = it.legs[1]
+        XCTAssertEqual(metro.line, "3")
+        XCTAssertEqual(metro.modeName, "Metro")
+        XCTAssertEqual(metro.stops, 4)
+        XCTAssertEqual(metro.headsign, "COMASINA")
+        XCTAssertNotNil(UIColor(hex: "FCC200"))
+        XCTAssertNil(UIColor(hex: "zzz"))
+        XCTAssertTrue(TransitPlanner.url(from: .init(latitude: 45.46, longitude: 9.19), to: .init(latitude: 45.48, longitude: 9.2), at: Date())
+            .absoluteString.contains("fromPlace=45.46,9.19"))
+    }
+
+    func testRouteModes() {
+        XCTAssertEqual(RouteMode(.bike), .bike)
+        XCTAssertNil(RouteMode.transit.travelMode)
+        XCTAssertEqual(RouteMode.allCases.count, 4)
+        XCTAssertEqual(4400 / bikeSpeed, 1000, accuracy: 1, "4,4 km in bici ~ 17 minuti")
     }
 }

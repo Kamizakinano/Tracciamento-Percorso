@@ -19,6 +19,7 @@ struct ContentView: View {
     @EnvironmentObject private var navigation: NavigationSession
     @StateObject private var explore = ExploreService()
     @StateObject private var planner = RoutePlanner()
+    @StateObject private var transit = TransitPlanner()
     @AppStorage(Settings.showHistory) private var showHistory = true
     @AppStorage(Settings.alertEnabled) private var alertEnabled = true
     @AppStorage(Settings.mapStyle) private var mapStyle = 0
@@ -35,6 +36,8 @@ struct ContentView: View {
     @State private var search: SearchRequest?
     @State private var place: Place?
     @State private var info: String?
+    @State private var routeMode: RouteMode = .car
+    @State private var showTransitDetail = false
 
     /// Mezzo usato per strade nuove e percorsi.
     private var mode: TravelMode { TravelMode(rawValue: travelMode) ?? tracker.currentMode }
@@ -47,7 +50,8 @@ struct ContentView: View {
                     currentPoints: tracker.points,
                     exploreLines: explore.lines,
                     exploreVersion: explore.version,
-                    route: navigation.route ?? planner.current,
+                    route: navigation.route ?? (routeMode == .transit ? nil : planner.current),
+                    transit: routeMode == .transit && !navigation.isActive && planner.destination != nil ? transit.current : nil,
                     mapType: mapType,
                     place: place,
                     navigating: navigation.isActive,
@@ -78,6 +82,12 @@ struct ContentView: View {
                 place = to
                 planRoute(to: to, from: from, mode: mode)
             }
+        }
+        .onReceive(transit.$itineraries) { its in
+            if let best = its.map(\.duration).min() { planner.setTransitETA(best) }
+        }
+        .sheet(isPresented: $showTransitDetail) {
+            if let it = transit.current { TransitDetailView(itinerary: it) }
         }
         .onChange(of: navigation.arrived) { arrived in
             // Arrivato: chiudi la navigazione da solo dopo un po'.
@@ -240,6 +250,7 @@ struct ContentView: View {
         }
         navigation.start(route: route, destination: destination, mode: planner.mode)
         planner.clear()
+        transit.clear()
         follow = true
     }
 
@@ -283,29 +294,36 @@ struct ContentView: View {
 
     private var controls: some View {
         HStack(spacing: 12) {
-            Button {
-                if tracker.isAutomatic {
-                    showTrips = true
-                } else if tracker.isRecording {
-                    tripName = ""
-                    askName = true
-                } else {
-                    follow = true
-                    tracker.start()
-                }
-            } label: {
-                Label(mainLabel.0, systemImage: mainLabel.1)
-                    .font(.headline)
-                    .padding(.horizontal, 22)
-                    .padding(.vertical, 14)
-                    .foregroundStyle(.white)
-                    .background(mainLabel.2, in: Capsule())
+            // Con un percorso aperto il pulsante verde "Avvia" della scheda basta:
+            // niente secondo "Avvia" (registrazione) per non confondere.
+            if planner.destination == nil || tracker.isRecording {
+                recordButton
             }
-
             roundButton("location.fill") { follow = true }
             roundButton("list.bullet") { showTrips = true }
         }
         .shadow(radius: 4)
+    }
+
+    private var recordButton: some View {
+        Button {
+            if tracker.isAutomatic {
+                showTrips = true
+            } else if tracker.isRecording {
+                tripName = ""
+                askName = true
+            } else {
+                follow = true
+                tracker.start()
+            }
+        } label: {
+            Label(mainLabel.0, systemImage: mainLabel.1)
+                .font(.headline)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 14)
+                .foregroundStyle(.white)
+                .background(mainLabel.2, in: Capsule())
+        }
     }
 
     private var newText: String {
@@ -367,6 +385,7 @@ struct ContentView: View {
             Button {
                 self.place = nil
                 planner.clear()
+                transit.clear()
             } label: {
                 Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
             }
@@ -395,51 +414,161 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
-            if planner.isLoading {
-                ProgressView("Cerco il percorso con più strade nuove…")
-            } else if let r = planner.current {
-                HStack {
-                    Button { planner.previous() } label: { Image(systemName: "chevron.left") }
-                        .disabled(planner.options.count < 2)
-                    Spacer()
-                    VStack(spacing: 2) {
-                        Text(planner.selected == 0 ? "Consigliato · 1 di \(planner.options.count)"
-                                                   : "Alternativa · \(planner.selected + 1) di \(planner.options.count)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Text("\(Geo.formatKm(r.distance)) · \(Geo.formatDuration(r.time))")
-                            .font(.headline)
-                        Text("\(Int((r.newFraction * 100).rounded()))% strade nuove")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.green)
-                    }
-                    Spacer()
-                    Button { planner.next() } label: { Image(systemName: "chevron.right") }
-                        .disabled(planner.options.count < 2)
-                }
-                .font(.title3)
+            modeRow
+            if routeMode == .transit {
+                transitContent
+            } else {
+                driveContent
             }
             HStack(spacing: 12) {
-                Button("Chiudi") {
-                    planner.clear()
-                    place = nil
-                }
-                .font(.subheadline)
+                Button("Chiudi", action: closeRoute)
+                    .font(.subheadline)
                 Spacer()
-                Button(action: startNavigation) {
-                    Label("Avvia", systemImage: "location.north.fill")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 28)
-                        .padding(.vertical, 12)
-                        .background(planner.current == nil ? Color.gray : Color.green, in: Capsule())
+                if routeMode == .transit {
+                    if transit.current != nil {
+                        Button("Dettagli") { showTransitDetail = true }
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    Button {
+                        if let dest = planner.destination {
+                            TransitPlanner.openInAppleMaps(from: planner.origin, to: dest)
+                        }
+                    } label: {
+                        Label("Apple Mappe", systemImage: "arrow.up.forward.app")
+                            .font(.subheadline)
+                    }
+                } else {
+                    Button(action: startNavigation) {
+                        Label("Avvia", systemImage: "location.north.fill")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 28)
+                            .padding(.vertical, 12)
+                            .background(planner.current == nil ? Color.gray : Color.green, in: Capsule())
+                    }
+                    .disabled(planner.current == nil)
                 }
-                .disabled(planner.current == nil)
             }
         }
         .padding()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
         .shadow(radius: 4)
+    }
+
+    /// Riga con auto, bici, a piedi e mezzi pubblici, ognuno con il suo tempo.
+    private var modeRow: some View {
+        HStack(spacing: 6) {
+            ForEach(RouteMode.allCases) { m in
+                Button { selectMode(m) } label: {
+                    VStack(spacing: 2) {
+                        Image(systemName: m.icon).font(.headline)
+                        Text(planner.etas[m].map { Geo.formatDuration($0) } ?? "–")
+                            .font(.caption.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .foregroundStyle(routeMode == m ? Color.white : Color.primary)
+                    .background(routeMode == m ? Color.accentColor : Color.secondary.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: 10))
+                }
+                .accessibilityLabel(m.label)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var driveContent: some View {
+        if planner.isLoading {
+            ProgressView("Cerco il percorso con più strade nuove…")
+        } else if let r = planner.current {
+            HStack {
+                Button { planner.previous() } label: { Image(systemName: "chevron.left") }
+                    .disabled(planner.options.count < 2)
+                Spacer()
+                VStack(spacing: 2) {
+                    Text(planner.selected == 0 ? "Consigliato · 1 di \(planner.options.count)"
+                                               : "Alternativa · \(planner.selected + 1) di \(planner.options.count)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(routeSummary(r))
+                        .font(.headline)
+                    Text("\(Int((r.newFraction * 100).rounded()))% strade nuove")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.green)
+                }
+                Spacer()
+                Button { planner.next() } label: { Image(systemName: "chevron.right") }
+                    .disabled(planner.options.count < 2)
+            }
+            .font(.title3)
+        }
+    }
+
+    @ViewBuilder
+    private var transitContent: some View {
+        if transit.isLoading {
+            ProgressView("Cerco autobus, tram e metro…")
+        } else if let it = transit.current {
+            HStack {
+                Button { transit.previous() } label: { Image(systemName: "chevron.left") }
+                    .disabled(transit.itineraries.count < 2)
+                    .font(.title3)
+                Spacer()
+                VStack(spacing: 6) {
+                    Text("\(it.start.formatted(date: .omitted, time: .shortened)) → \(it.end.formatted(date: .omitted, time: .shortened)) · \(Geo.formatDuration(it.duration))")
+                        .font(.headline)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 4) {
+                            ForEach(Array(it.legs.enumerated()), id: \.element.id) { i, leg in
+                                if i > 0 {
+                                    Image(systemName: "chevron.compact.right").foregroundStyle(.secondary)
+                                }
+                                if leg.isWalk {
+                                    Label("\(max(1, Int(leg.duration / 60)))'", systemImage: "figure.walk")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                } else {
+                                    TransitBadge(leg: leg)
+                                }
+                            }
+                        }
+                    }
+                    Text(it.transfers == 0 ? "Nessun cambio" : (it.transfers == 1 ? "1 cambio" : "\(it.transfers) cambi"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button { transit.next() } label: { Image(systemName: "chevron.right") }
+                    .disabled(transit.itineraries.count < 2)
+                    .font(.title3)
+            }
+        } else {
+            Text(transit.message ?? "Nessun mezzo pubblico trovato.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+    }
+
+    private func routeSummary(_ r: RouteOption) -> String {
+        let text = "\(Geo.formatKm(r.distance)) · \(Geo.formatDuration(r.time))"
+        return routeMode == .bike ? text + " (stima)" : text
+    }
+
+    private func selectMode(_ m: RouteMode) {
+        routeMode = m
+        guard let travel = m.travelMode, let start = planner.start, let dest = planner.destination else { return }
+        if travel != planner.mode || planner.options.isEmpty {
+            planner.plan(from: start, origin: planner.origin, to: dest, mode: travel, index: store.index)
+        }
+    }
+
+    private func closeRoute() {
+        planner.clear()
+        transit.clear()
+        place = nil
     }
 
     /// `from` nil = parti dalla posizione attuale.
@@ -448,7 +577,11 @@ struct ContentView: View {
             info = "Posizione attuale non disponibile."
             return
         }
-        planner.plan(from: start, origin: origin, to: place, mode: routeMode ?? mode, index: store.index)
+        let travel = routeMode ?? mode
+        self.routeMode = RouteMode(travel)
+        planner.plan(from: start, origin: origin, to: place, mode: travel, index: store.index)
+        planner.computeETAs(from: start, to: place.coordinate)
+        transit.plan(from: start, to: place.coordinate)
     }
 
     // MARK: - Strade nuove
@@ -513,6 +646,9 @@ struct ContentView: View {
                 let p = Place(name: parts[2], coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lon))
                 place = p
                 DispatchQueue.main.asyncAfter(deadline: .now() + 4) { planRoute(to: p) }
+                if args.contains("-transit") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 14) { selectMode(.transit) }
+                }
                 if args.contains("-navigate") {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 12) { startNavigation() }
                 }

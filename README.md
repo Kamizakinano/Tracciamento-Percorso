@@ -24,6 +24,14 @@ Così durante i viaggi puoi scegliere strade nuove.
 - **Percorso con più strade nuove**: l'app confronta i percorsi di Apple più due
   varianti e propone (in viola) quello con più strade nuove senza allungare
   troppo; con ‹ › vedi le alternative.
+- **Riga dei mezzi** nella scheda del percorso: tempi con 🚗 auto, 🚲 bici
+  (stima a ~16 km/h sul percorso pedonale: Apple non fornisce percorsi in bici
+  alle app), 🚶 a piedi e 🚇 mezzi pubblici; tocca un mezzo per cambiare.
+- **Mezzi pubblici** (bus, tram, metro, treni): itinerari da
+  [Transitous](https://transitous.org) (gratuito, orari pubblici di gran parte
+  d'Europa e oltre) con linee, colori, fermate e orari; "Dettagli" mostra dove
+  salire e scendere. Se in una zona mancano i dati, "Apple Mappe" apre le
+  indicazioni con i mezzi in Mappe.
 - **Navigazione nell'app** (Avvia): prossima svolta con freccia e distanza,
   guida vocale in italiano, mappa 3D che ruota con la direzione, orario di
   arrivo, tempo e km rimanenti, ricalcolo automatico se esci dal percorso.
@@ -94,6 +102,7 @@ era rimasta.
 | `ios/Percorso/ContentView.swift`, `TripsView.swift` | Interfaccia |
 | `ios/Percorso/SearchView.swift` | Ricerca partenza/destinazione |
 | `ios/Percorso/NavigationSession.swift` | Navigazione svolta per svolta |
+| `ios/Percorso/TransitPlanner.swift` | Mezzi pubblici (Transitous) |
 | `ios/Percorso/GPX.swift` | Import/export GPX |
 | `ios/Percorso/ExploreService.swift` | Strade nuove da OpenStreetMap |
 | `ios/Percorso/RoutePlanner.swift` | Percorso con più strade nuove |
