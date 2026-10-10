@@ -1,0 +1,13 @@
+{
+  "name": "Tracciamento Percorso",
+  "short_name": "Percorso",
+  "description": "Registra i tuoi viaggi ed evidenzia le strade già percorse.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1f6feb",
+  "lang": "it",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

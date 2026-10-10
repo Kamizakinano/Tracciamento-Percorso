@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f6feb">
+  <title>Tracciamento Percorso</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="map"></div>
+
+  <div id="alert" class="alert hidden">⚠️ Strada già percorsa</div>
+
+  <div id="stats" class="stats">
+    <span id="stat-status">Fermo</span>
+    <span id="stat-distance">0,00 km</span>
+    <span id="stat-new">Nuove strade: –</span>
+  </div>
+
+  <div class="controls">
+    <button id="btn-track" class="primary">▶ Avvia</button>
+    <button id="btn-center" title="Centra sulla mia posizione">◎</button>
+    <button id="btn-menu" title="Viaggi salvati">☰</button>
+  </div>
+
+  <aside id="panel" class="panel hidden">
+    <header>
+      <h2>Viaggi salvati</h2>
+      <button id="btn-close" title="Chiudi">✕</button>
+    </header>
+    <label class="row">
+      <input type="checkbox" id="chk-history" checked>
+      Mostra strade già percorse
+    </label>
+    <label class="row">
+      <input type="checkbox" id="chk-alert" checked>
+      Avvisami se passo su una strada già fatta
+    </label>
+    <label class="row">
+      Distanza di avviso
+      <select id="sel-threshold">
+        <option value="15">15 m</option>
+        <option value="25" selected>25 m</option>
+        <option value="40">40 m</option>
+      </select>
+    </label>
+    <ul id="trip-list"></ul>
+    <div class="row buttons">
+      <button id="btn-export">Esporta tutto (GPX)</button>
+      <label class="button">Importa GPX
+        <input type="file" id="file-import" accept=".gpx,application/gpx+xml" multiple hidden>
+      </label>
+    </div>
+  </aside>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
