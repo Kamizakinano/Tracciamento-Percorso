@@ -61,7 +61,8 @@ enum PlaceSearch {
             // Stesso negozio restituito due volte: tienine uno.
             let key = "\((c.latitude * 2000).rounded()),\((c.longitude * 2000).rounded())"
             guard seen.insert(key).inserted else { return nil }
-            return Place(name: item.name ?? text, coordinate: c, address: address(of: item.placemark))
+            return Place(name: item.name ?? text, coordinate: c,
+                         address: address(of: item.placemark) ?? item.placemark.title)
         }
     }
 

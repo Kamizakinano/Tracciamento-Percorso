@@ -41,6 +41,8 @@ struct ContentView: View {
     @State private var searchResults: [Place] = []
     @State private var resultsTitle = ""
     @State private var resultsVersion = 0
+    /// Centro usato per ordinare i risultati quando la posizione non è disponibile.
+    @State private var resultsOrigin: CLLocationCoordinate2D?
 
     /// Mezzo usato per strade nuove e percorsi.
     private var mode: TravelMode { TravelMode(rawValue: travelMode) ?? tracker.currentMode }
@@ -616,7 +618,7 @@ struct ContentView: View {
     }
 
     private func distanceText(_ place: Place) -> String? {
-        guard let me = mapState.userLocation ?? tracker.currentLocation?.coordinate else { return nil }
+        guard let me = mapState.userLocation ?? tracker.currentLocation?.coordinate ?? resultsOrigin else { return nil }
         return Geo.formatShort(Geo.distance(me, place.coordinate))
     }
 
@@ -625,7 +627,8 @@ struct ContentView: View {
         transit.clear()
         place = nil
         resultsTitle = title
-        searchResults = PlaceSearch.sorted(results, from: mapState.userLocation ?? tracker.currentLocation?.coordinate)
+        resultsOrigin = mapState.userLocation ?? tracker.currentLocation?.coordinate ?? mapState.region?.center
+        searchResults = PlaceSearch.sorted(results, from: resultsOrigin)
         resultsVersion += 1
     }
 

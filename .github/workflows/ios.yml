@@ -12,6 +12,11 @@ on:
 permissions:
   contents: write
 
+# Una compilazione alla volta: così su ipa-build resta sempre l'ultima versione.
+concurrency:
+  group: ios-build
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: macos-15

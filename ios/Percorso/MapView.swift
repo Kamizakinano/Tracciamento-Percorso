@@ -323,6 +323,8 @@ struct MapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, regionDidChangeAnimated animated: Bool) {
+            // La posizione può non cambiare mai (per esempio da fermi): passala comunque.
+            if let loc = mapView.userLocation.location { parent.onUserLocation(loc.coordinate) }
             parent.onRegionChange(mapView.region)
         }
     }
