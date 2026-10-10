@@ -20,7 +20,7 @@ jobs:
         working-directory: ios
         run: xcodegen generate
 
-      - name: Compila (senza firma: la firma la fa Sideloadly)
+      - name: Compila senza firma (la firma la fa Sideloadly)
         working-directory: ios
         run: |
           set -o pipefail
