@@ -1,0 +1,39 @@
+# Progetto Xcode generato con XcodeGen (https://github.com/yonaskolb/XcodeGen):
+#   cd ios && xcodegen
+name: Percorso
+options:
+  bundleIdPrefix: com.kamizakinano
+  deploymentTarget:
+    iOS: "16.0"
+targets:
+  Percorso:
+    type: application
+    platform: iOS
+    sources:
+      - Percorso
+    info:
+      path: Percorso/Info.plist
+      properties:
+        CFBundleDisplayName: Percorso
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIBackgroundModes:
+          - location
+        NSLocationWhenInUseUsageDescription: Serve la posizione per registrare il percorso e avvisarti quando passi su strade già fatte.
+        NSLocationAlwaysAndWhenInUseUsageDescription: Serve la posizione anche in background per continuare a registrare il viaggio a schermo spento.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.kamizakinano.percorso
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

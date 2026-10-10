@@ -1,54 +1,69 @@
 # Tracciamento Percorso
 
-Web app (installabile sul telefono) che registra i tuoi viaggi con il GPS ed
-**evidenzia in arancione le strade già percorse**, così durante i viaggi puoi
-scegliere strade nuove.
+App per iPhone che registra i tuoi viaggi con il GPS, **anche in background
+e a schermo spento**, ed **evidenzia in arancione le strade già percorse**.
+Così durante i viaggi puoi scegliere strade nuove.
 
 ## Funzioni
 
-- **▶ Avvia / ■ Ferma**: registra il viaggio in corso (linea blu).
+- **Avvia / Ferma**: registra il viaggio in corso (linea blu). Alla fine puoi
+  dargli un nome, salvarlo o scartarlo.
 - **Strade già percorse**: tutti i viaggi salvati sono disegnati in arancione;
   le strade fatte più volte risultano più intense.
 - **Avviso**: se passi su una strada già fatta compare il banner
-  "⚠️ Strada già percorsa" e il telefono vibra. La distanza di avviso
-  (15 / 25 / 40 m) è regolabile.
-- **Nuove strade %**: quanta parte del viaggio attuale è su strade mai fatte.
-- **☰ Viaggi salvati**: elenco, zoom su un viaggio, eliminazione,
-  esportazione e importazione **GPX** (anche da altre app come Strava o Komoot).
-- I dati restano **solo sul tuo dispositivo** (memoria del browser): esporta
-  il GPX ogni tanto come backup.
-- Se il browser si chiude durante un viaggio, alla riapertura la registrazione
+  "⚠️ Strada già percorsa" con vibrazione. Con l'app in background arriva una
+  notifica (al massimo una al minuto). La distanza di avviso (15 / 25 / 40 m)
+  è regolabile.
+- **Nuove %**: quanta parte del viaggio attuale è su strade mai fatte.
+- **Elenco viaggi**: zoom su un viaggio, eliminazione (scorri a sinistra),
+  esportazione e importazione **GPX** (anche da Strava, Komoot, ecc.).
+- I dati restano **solo sul telefono**, in `trips.json`, visibile anche
+  dall'app File (*Sul mio iPhone → Percorso*). Esporta il GPX ogni tanto come
+  backup.
+- Se l'app viene chiusa durante un viaggio, alla riapertura la registrazione
   riprende.
 
-## Come usarla sul telefono
+## Installazione con Sideloadly
 
-Il GPS nel browser funziona solo con HTTPS, quindi il modo più semplice è
-pubblicarla con **GitHub Pages**:
+L'`.ipa` viene compilato automaticamente da GitHub Actions (serve un Mac, che
+GitHub mette a disposizione) a ogni modifica della cartella `ios/`.
 
-1. Su GitHub: *Settings → Pages → Build and deployment*, *Source: Deploy from a
-   branch*, scegli il branch e la cartella `/ (root)`.
-2. Apri l'indirizzo `https://<utente>.github.io/Tracciamento-Percorso/` dal
-   telefono e consenti l'accesso alla posizione.
-3. Dal menu del browser scegli **"Aggiungi a schermata Home"** per usarla come
-   un'app.
+1. Su GitHub apri la scheda **Actions → Build iOS (IPA per Sideloadly)**,
+   entra nell'ultima esecuzione riuscita e scarica l'artifact
+   **Percorso-ipa** (è uno zip: estrai `Percorso.ipa`).
+   Puoi anche avviarla a mano con **Run workflow**.
+2. Apri **Sideloadly**, collega l'iPhone, trascina `Percorso.ipa`, inserisci il
+   tuo Apple ID e premi **Start**.
+3. Sull'iPhone: *Impostazioni → Generali → VPN e gestione dispositivi* →
+   autorizza il tuo Apple ID. Su iOS 16+ attiva anche la
+   **Modalità sviluppatore** (*Impostazioni → Privacy e sicurezza*).
+4. Al primo **Avvia** consenti la posizione (**"Mentre usi l'app"** basta per
+   il background) e le notifiche.
 
-## Limiti da sapere
+Con un Apple ID gratuito l'app scade dopo **7 giorni**: basta reinstallarla con
+Sideloadly (i viaggi salvati restano se non la disinstalli).
 
-- Le app web **non registrano con lo schermo spento** o con il browser in
-  background. Per questo l'app tiene lo schermo acceso durante la
-  registrazione (dove il browser lo supporta). Per tracciare in background
-  servirebbe un'app nativa (Android/iOS): si può fare in un secondo momento.
-- La mappa (OpenStreetMap) richiede la connessione internet.
+### Come funziona il background
+
+L'app dichiara la modalità background *location*: una volta avviata la
+registrazione, iOS continua a inviare le posizioni anche con l'app chiusa nel
+multitasking o lo schermo spento (in alto compare l'indicatore blu della
+posizione). Se però chiudi l'app forzatamente (scorrendola via dal
+multitasking) iOS ferma il GPS: riaprila e la registrazione riprende da dove
+era rimasta.
 
 ## Struttura
 
-| File | Contenuto |
+| Percorso | Contenuto |
 |---|---|
-| `index.html` | Interfaccia |
-| `style.css` | Stile (chiaro/scuro automatico) |
-| `app.js` | GPS, salvataggio, rilevamento strade già percorse, GPX |
-| `sw.js`, `manifest.json` | Installazione come app e funzionamento offline |
-| `vendor/leaflet/` | Libreria mappe [Leaflet](https://leafletjs.com) 1.9.4 (licenza BSD-2) |
+| `ios/project.yml` | Definizione del progetto Xcode (XcodeGen) |
+| `ios/Percorso/LocationTracker.swift` | GPS in background, avvisi, salvataggio del viaggio in corso |
+| `ios/Percorso/TripStore.swift` | Viaggi salvati e indice delle strade già fatte |
+| `ios/Percorso/MapView.swift` | Mappa (Apple Maps) con i percorsi evidenziati |
+| `ios/Percorso/ContentView.swift`, `TripsView.swift` | Interfaccia |
+| `ios/Percorso/GPX.swift` | Import/export GPX |
+| `.github/workflows/ios.yml` | Compilazione dell'`.ipa` |
+| `web/` | Prima versione come web app (senza background) |
 
-Per provarla sul computer: `python3 -m http.server` nella cartella e apri
-`http://localhost:8000`.
+Per compilare su un Mac: `brew install xcodegen && cd ios && xcodegen` e apri
+`Percorso.xcodeproj`.
