@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var tripName = ""
     @State private var showSearch = false
     @State private var place: Place?
+    @State private var searchQuery = ""
 
     var body: some View {
         ZStack {
@@ -55,9 +56,20 @@ struct ContentView: View {
             .padding()
             .animation(.easeInOut(duration: 0.2), value: tracker.onOldRoad)
         }
-        .onAppear { follow = store.trips.isEmpty || tracker.isRecording }
+        .onAppear {
+            follow = store.trips.isEmpty || tracker.isRecording
+            #if DEBUG
+            // Parametri di avvio usati per gli screenshot automatici (ios/scripts/screenshots.sh).
+            let args = ProcessInfo.processInfo.arguments
+            if args.contains("-showTrips") { showTrips = true }
+            if let i = args.firstIndex(of: "-search"), i + 1 < args.count {
+                searchQuery = args[i + 1]
+                showSearch = true
+            }
+            #endif
+        }
         .sheet(isPresented: $showSearch) {
-            SearchView { place = $0 }
+            SearchView(onSelect: { place = $0 }, initialQuery: searchQuery)
         }
         .sheet(isPresented: $showTrips) {
             TripsView(focus: $focus)

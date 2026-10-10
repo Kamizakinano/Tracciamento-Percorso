@@ -73,7 +73,9 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             break
         }
 
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        if !ProcessInfo.processInfo.arguments.contains("-screenshots") {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        }
 
         if points.isEmpty {
             tripStart = Date()

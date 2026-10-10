@@ -33,6 +33,7 @@ final class SearchCompleter: NSObject, ObservableObject, MKLocalSearchCompleterD
 
 struct SearchView: View {
     let onSelect: (Place) -> Void
+    var initialQuery = ""
 
     @StateObject private var completer = SearchCompleter()
     @Environment(\.dismiss) private var dismiss
@@ -70,6 +71,9 @@ struct SearchView: View {
                 let request = MKLocalSearch.Request()
                 request.naturalLanguageQuery = completer.query
                 run(request)
+            }
+            .onAppear {
+                if !initialQuery.isEmpty { completer.query = initialQuery }
             }
             .navigationTitle("Cerca")
             .navigationBarTitleDisplayMode(.inline)

@@ -36,12 +36,18 @@ jobs:
           print(next(d["udid"] for rt, ds in sorted(devs.items(), reverse=True)
                      if "iOS" in rt for d in ds if d["name"].startswith("iPhone")))')
           echo "Simulatore: $UDID"
+          echo "UDID=$UDID" >> "$GITHUB_ENV"
           xcodebuild test \
             -project Percorso.xcodeproj \
             -scheme Percorso \
             -destination "id=$UDID" \
             -derivedDataPath build-test \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Screenshot dal simulatore
+        working-directory: ios
+        continue-on-error: true
+        run: bash scripts/screenshots.sh "$UDID" build-test/Build/Products/Debug-iphonesimulator/Percorso.app screenshots
 
       - name: Compila senza firma (la firma la fa Sideloadly)
         working-directory: ios
@@ -80,6 +86,9 @@ jobs:
         run: |
           OUT=$(mktemp -d)
           cp ios/Percorso.ipa "$OUT/"
+          if ls ios/screenshots/*.png >/dev/null 2>&1; then
+            mkdir -p "$OUT/screenshots" && cp ios/screenshots/*.png "$OUT/screenshots/"
+          fi
           cd "$OUT"
           printf 'Commit: %s\nBranch: %s\nData: %s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%Y-%m-%dT%H:%MZ)" > BUILD.txt
           git init -q -b ipa-build

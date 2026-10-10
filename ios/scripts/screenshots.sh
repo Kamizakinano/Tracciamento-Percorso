@@ -1,0 +1,52 @@
+#!/bin/bash
+# Screenshot reali dell'app nel simulatore iOS, con viaggi di prova.
+# Uso: screenshots.sh <udid simulatore> <Percorso.app per simulatore> <cartella di uscita>
+set -euo pipefail
+UDID="$1"; APP="$2"; OUT="$3"
+BUNDLE=com.kamizakinano.percorso
+DIR="$(cd "$(dirname "$0")" && pwd)"
+DEMO="$(mktemp -d)"
+
+mkdir -p "$OUT"
+xcrun simctl boot "$UDID" 2>/dev/null || true
+xcrun simctl bootstatus "$UDID" -b
+xcrun simctl status_bar "$UDID" override --time 9:41 --batteryState charged --batteryLevel 100 \
+  --cellularMode active --cellularBars 4 --wifiBars 3 || true
+xcrun simctl install "$UDID" "$APP"
+xcrun simctl privacy "$UDID" grant location-always "$BUNDLE" || xcrun simctl privacy "$UDID" grant location "$BUNDLE"
+
+python3 "$DIR/demo_data.py" "$DEMO"
+DOCS="$(xcrun simctl get_app_container "$UDID" "$BUNDLE" data)/Documents"
+mkdir -p "$DOCS"
+cp "$DEMO/trips.json" "$DOCS/"
+
+stop_app() { xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true; sleep 1; }
+map_style() { xcrun simctl spawn "$UDID" defaults write "$BUNDLE" mapStyle -int "$1"; }
+shot() {
+  local name="$1"; shift
+  stop_app
+  xcrun simctl launch "$UDID" "$BUNDLE" -screenshots "$@" >/dev/null
+  sleep 15  # tempo per caricare le mappe
+  xcrun simctl io "$UDID" screenshot "$OUT/$name.png"
+  echo "Salvato $name.png"
+}
+
+xcrun simctl location "$UDID" set "$(cat "$DEMO/home.txt")"
+map_style 0
+shot 1-mappa
+
+# Registrazione in corso su una strada già fatta (l'app riprende il viaggio salvato).
+cp "$DEMO/current.json" "$DOCS/"
+xcrun simctl location "$UDID" set "$(cat "$DEMO/here.txt")"
+shot 2-registrazione
+stop_app
+rm -f "$DOCS/current.json"
+xcrun simctl location "$UDID" set "$(cat "$DEMO/home.txt")"
+
+map_style 1
+shot 3-satellite
+map_style 0
+
+shot 4-viaggi -showTrips
+shot 5-ricerca -search "Duomo di Milano"
+stop_app
