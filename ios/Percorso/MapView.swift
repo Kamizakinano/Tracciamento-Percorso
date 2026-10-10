@@ -18,6 +18,9 @@ struct MapView: UIViewRepresentable {
     var resultsVersion = 0
     /// Inquadra i risultati (no quando si cerca nella zona già visibile).
     var fitResults = true
+    /// Auto parcheggiata e parcheggi passati vicino alla destinazione.
+    var parking: ParkingSpot? = nil
+    var parkingHints: [ParkingSpot] = []
     let mapType: MKMapType
     let place: Place?
     /// Navigazione in corso: mappa inclinata che segue la direzione di marcia.
@@ -30,6 +33,8 @@ struct MapView: UIViewRepresentable {
     var onUserLocation: (CLLocationCoordinate2D) -> Void = { _ in }
     /// Tocco sul pulsante "percorso" nel fumetto di un risultato.
     var onSelectResult: (Place) -> Void = { _ in }
+    /// Tocco sul segnaposto dell'auto.
+    var onSelectParking: () -> Void = {}
 
     /// Colori per numero di passaggi: 1 · 2-3 · 4 o più.
     static let levelColors: [UIColor] = [.systemYellow, .systemOrange, .systemRed]
@@ -102,6 +107,21 @@ struct MapView: UIViewRepresentable {
                 c.exploreOverlay = multi
             }
             c.exploreVersion = exploreVersion
+        }
+
+        let parkingKey = parking.map { "\($0.id)-\($0.lat)-\($0.lon)-\($0.address ?? "")" } ?? ""
+        if c.parkingKey != parkingKey {
+            if let old = c.parkingAnnotation { map.removeAnnotation(old) }
+            c.parkingAnnotation = parking.map { ParkingAnnotation(spot: $0, isCar: true) }
+            if let a = c.parkingAnnotation { map.addAnnotation(a) }
+            c.parkingKey = parkingKey
+        }
+        let hintsKey = parkingHints.map(\.id.uuidString).joined()
+        if c.hintsKey != hintsKey {
+            map.removeAnnotations(c.hintAnnotations)
+            c.hintAnnotations = parkingHints.map { ParkingAnnotation(spot: $0, isCar: false) }
+            map.addAnnotations(c.hintAnnotations)
+            c.hintsKey = hintsKey
         }
 
         if c.routeID != route?.id {
@@ -243,6 +263,10 @@ struct MapView: UIViewRepresentable {
         var transitID: UUID?
         var resultsVersion = 0
         var resultAnnotations: [ResultAnnotation] = []
+        var parkingKey = ""
+        var parkingAnnotation: ParkingAnnotation?
+        var hintsKey = ""
+        var hintAnnotations: [ParkingAnnotation] = []
         var transitOverlays: [MKOverlay] = []
         var currentCount = -1
         var placeID: UUID?
@@ -300,6 +324,25 @@ struct MapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if let spot = annotation as? ParkingAnnotation {
+                let id = spot.isCar ? "car" : "parkingHint"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: spot, reuseIdentifier: id)
+                view.annotation = spot
+                if spot.isCar {
+                    view.markerTintColor = .systemBlue
+                    view.glyphImage = UIImage(systemName: "car.fill")
+                    view.displayPriority = .required
+                    view.canShowCallout = false
+                } else {
+                    view.markerTintColor = .systemTeal
+                    view.glyphText = "P"
+                    view.glyphImage = nil
+                    view.displayPriority = .defaultHigh
+                    view.canShowCallout = true
+                }
+                return view
+            }
             guard let result = annotation as? ResultAnnotation else { return nil }
             let id = "result"
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView
@@ -314,6 +357,12 @@ struct MapView: UIViewRepresentable {
             button.frame = CGRect(x: 0, y: 0, width: 36, height: 36)
             view.rightCalloutAccessoryView = button
             return view
+        }
+
+        func mapView(_ mapView: MKMapView, didSelect view: MKAnnotationView) {
+            guard let spot = view.annotation as? ParkingAnnotation, spot.isCar else { return }
+            mapView.deselectAnnotation(spot, animated: false)
+            parent.onSelectParking()
         }
 
         func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, calloutAccessoryControlTapped control: UIControl) {
@@ -346,4 +395,20 @@ final class ResultAnnotation: NSObject, MKAnnotation {
     var subtitle: String? { place.address }
 
     init(place: Place) { self.place = place }
+}
+
+/// Segnaposto dell'auto parcheggiata (o di un parcheggio passato).
+final class ParkingAnnotation: NSObject, MKAnnotation {
+    let spot: ParkingSpot
+    let isCar: Bool
+    var coordinate: CLLocationCoordinate2D { spot.coordinate }
+    var title: String? { isCar ? "La tua auto" : spot.title }
+    var subtitle: String? {
+        isCar ? spot.address : "Parcheggiato il \(spot.date.formatted(date: .abbreviated, time: .omitted))"
+    }
+
+    init(spot: ParkingSpot, isCar: Bool) {
+        self.spot = spot
+        self.isCar = isCar
+    }
 }

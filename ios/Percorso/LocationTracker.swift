@@ -26,6 +26,8 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     private var recentSpeeds: [Double] = []
     private var lastNotification = Date.distantPast
     private var lastVoice = Date.distantPast
+    private var parkingDetector = ParkingDetector()
+    private var pendingFixes: [(CLLocation) -> Void] = []
 
     private let maxAccuracy = 50.0
     private let currentURL = TripStore.documents.appendingPathComponent("current.json")
@@ -47,6 +49,8 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
 
     /// Riceve ogni posizione valida (usato dalla navigazione).
     var onLocation: ((CLLocation) -> Void)?
+    /// Parcheggio rilevato dalla velocità (auto → piedi) o ripartenza in auto.
+    var onParking: ((ParkingEvent) -> Void)?
     /// Prossima svolta da mostrare nella Live Activity durante la navigazione.
     var navigationInfo: (instruction: String, distance: Double, icon: String)?
     var authorization: CLAuthorizationStatus { manager.authorizationStatus }
@@ -111,6 +115,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             break
         }
         requestNotifications()
+        parkingDetector.reset()
         if points.isEmpty { resetTrip() }
         configure(automatic: false)
         manager.startUpdatingLocation()
@@ -122,6 +127,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
 
     /// Ferma la registrazione manuale; se `keep` è vero il viaggio viene salvato.
     func stop(name: String?, keep: Bool) {
+        endParkingDetection(next: nil)
         manager.stopUpdatingLocation()
         manager.allowsBackgroundLocationUpdates = false
         isRecording = false
@@ -174,6 +180,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     private func stopAuto() {
+        endParkingDetection(next: nil)
         finishAutoSegment()
         manager.stopUpdatingLocation()
         manager.stopMonitoringSignificantLocationChanges()
@@ -206,6 +213,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
 
     @objc private func didBecomeActive() {
         if isAutomatic, let last = points.last, Date().timeIntervalSince(last.time) > Self.autoGap {
+            endParkingDetection(next: manager.location.map(TrackPoint.init))
             finishAutoSegment()
         }
         if isRecording { startLiveActivity() }
@@ -257,6 +265,8 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     func locationManagerDidPauseLocationUpdates(_ manager: CLLocationManager) {
+        // iOS sospende il GPS quando resti fermo: se stavi guidando, hai parcheggiato.
+        endParkingDetection(next: nil)
         paused = true
         persistCurrent()
     }
@@ -266,6 +276,11 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        if let last = locations.last, !pendingFixes.isEmpty {
+            let fixes = pendingFixes
+            pendingFixes = []
+            fixes.forEach { $0(last) }
+        }
         guard isRecording else { return }
         if isAutomatic && paused {
             // Risvegliati da un cambio di posizione significativo: riattiva il GPS preciso.
@@ -279,8 +294,10 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             onLocation?(loc)
             let p = TrackPoint(loc)
             if isAutomatic, let last = points.last, Self.shouldSplit(last: last, next: p) {
+                endParkingDetection(next: p)
                 finishAutoSegment()
             }
+            feedParking(p, speed: loc.speed)
             let near = store.index.isNear(p, within: Settings.threshold(for: currentMode))
             if let last = points.last {
                 let step = Geo.distance(last, p)
@@ -316,6 +333,36 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             currentMode = mode
             if !isAutomatic { manager.distanceFilter = mode.minStep }
         }
+    }
+
+    // MARK: - Parcheggio
+
+    /// Il rilevamento dalla velocità è attivo (non con mezzo fisso bici o piedi).
+    private var detectsParking: Bool {
+        Settings.parkingDetect == 1 && (Settings.fixedMode ?? .car) == .car
+    }
+
+    private func feedParking(_ p: TrackPoint, speed: Double) {
+        guard detectsParking else { return }
+        if let event = parkingDetector.feed(p, speed: speed) { onParking?(event) }
+    }
+
+    private func endParkingDetection(next: TrackPoint?) {
+        guard detectsParking else {
+            parkingDetector.reset()
+            return
+        }
+        if let event = parkingDetector.tripEnded(next: next) { onParking?(event) }
+    }
+
+    /// Posizione recente (meno di 2 minuti), oppure ne chiede una nuova al GPS.
+    func freshLocation(_ completion: @escaping (CLLocation) -> Void) {
+        if let loc = manager.location, loc.timestamp.timeIntervalSinceNow > -120, loc.horizontalAccuracy <= 100 {
+            completion(loc)
+            return
+        }
+        pendingFixes.append(completion)
+        if !isRecording { manager.requestLocation() }
     }
 
     // MARK: - Avviso strada già percorsa

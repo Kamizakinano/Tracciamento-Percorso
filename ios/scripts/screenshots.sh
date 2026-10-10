@@ -58,6 +58,14 @@ shot 11-negozi -searchAll "Lidl"
 sleep 8 && xcrun simctl io "$UDID" screenshot "$OUT/11-negozi.png"  # attende i risultati
 shot 12-cerca-zona -searchAll "Lidl" -panAfter
 sleep 10 && xcrun simctl io "$UDID" screenshot "$OUT/12-cerca-zona.png"  # dopo lo spostamento della mappa
+# Parcheggio (dati di prova: auto vicino al Duomo con ticket, storico vicino alla Stazione Centrale).
+shot 13-parcheggio-mappa -parkDemo
+shot 14-parcheggio-scheda -parkDemo -showParking
+shot 15-parcheggio-storico -parkDemo -parkingHistory
+shot 16-parcheggio-zona -parkDemo -routeTo "45.4859,9.2048,Stazione Centrale"
+sleep 10 && xcrun simctl io "$UDID" screenshot "$OUT/16-parcheggio-zona.png"  # attende i percorsi di Apple
+stop_app
+rm -rf "$DOCS/parking.json" "$DOCS/Parcheggi"  # gli altri screenshot senza auto parcheggiata
 shot 10-mezzi -routeTo "45.4859,9.2048,Stazione Centrale" -transit
 sleep 12 && xcrun simctl io "$UDID" screenshot "$OUT/10-mezzi.png"  # attende Transitous
 shot 9-navigazione -routeTo "45.4859,9.2048,Stazione Centrale" -navigate

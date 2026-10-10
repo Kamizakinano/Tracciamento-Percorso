@@ -118,6 +118,10 @@ enum Settings {
     static let voiceAlert = "voiceAlert"       // 0 mai, 1 cuffie/CarPlay, 2 sempre
     static let mapStyle = "mapStyle"
     static let navigationVoice = "navigationVoice"
+    static let parkingDetectKey = "parkingDetect"     // 0 no, 1 velocità e Bluetooth, 2 solo Bluetooth
+    static let carBluetoothKey = "carBluetooth"       // nome del Bluetooth dell'auto
+    static let parkingReminder = "parkingReminder"    // minuti di preavviso del ticket
+    private static let askedBluetoothKey = "askedBluetooth"
 
     private static var d: UserDefaults { .standard }
 
@@ -126,6 +130,14 @@ enum Settings {
     static var fixedMode: TravelMode? { TravelMode(rawValue: d.string(forKey: travelMode) ?? "") }
     static var voiceMode: Int { d.object(forKey: voiceAlert) as? Int ?? 1 }
     static var navigationVoiceOn: Bool { d.object(forKey: navigationVoice) as? Bool ?? true }
+    static var parkingDetect: Int { d.object(forKey: parkingDetectKey) as? Int ?? 1 }
+    static var carBluetooth: String { d.string(forKey: carBluetoothKey) ?? "" }
+    static var parkingReminderMinutes: Int { d.object(forKey: parkingReminder) as? Int ?? 10 }
+    /// Dispositivi Bluetooth per cui è già stato chiesto "È la tua auto?".
+    static var askedBluetooth: [String] {
+        get { d.stringArray(forKey: askedBluetoothKey) ?? [] }
+        set { d.set(newValue, forKey: askedBluetoothKey) }
+    }
 
     static func threshold(for mode: TravelMode) -> Double {
         let v = d.double(forKey: threshold)

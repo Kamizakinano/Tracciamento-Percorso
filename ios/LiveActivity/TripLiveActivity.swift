@@ -6,6 +6,7 @@ import WidgetKit
 struct PercorsoLiveActivityBundle: WidgetBundle {
     var body: some Widget {
         TripLiveActivity()
+        ParkingLiveActivity()
     }
 }
 

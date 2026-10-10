@@ -4,8 +4,12 @@ import UniformTypeIdentifiers
 struct TripsView: View {
     @EnvironmentObject private var store: TripStore
     @EnvironmentObject private var tracker: LocationTracker
+    @EnvironmentObject private var parking: ParkingStore
     @ObservedObject private var backup = BackupManager.shared
     @Binding var focus: Trip?
+    /// "Ho parcheggiato qui" e apertura della scheda del parcheggio (gestiti dalla mappa).
+    var onPark: () -> Void = {}
+    var onOpenParking: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
 
     @AppStorage(Settings.showHistory) private var showHistory = true
@@ -40,6 +44,26 @@ struct TripsView: View {
                     } label: {
                         Label("Statistiche", systemImage: "chart.bar.xaxis")
                     }
+                }
+
+                Section {
+                    if parking.current == nil {
+                        Button {
+                            dismiss()
+                            onPark()
+                        } label: {
+                            Label("Ho parcheggiato qui", systemImage: "parkingsign.circle.fill")
+                        }
+                    }
+                    Button {
+                        dismiss()
+                        onOpenParking()
+                    } label: {
+                        Label(parking.current.map { "Auto parcheggiata in \($0.title)" } ?? "Parcheggi e storico",
+                              systemImage: "car.fill")
+                    }
+                } header: {
+                    Text("Parcheggio")
                 }
 
                 Section {
@@ -125,7 +149,7 @@ struct TripsView: View {
                             LabeledContent("Ultimo backup", value: last.formatted(date: .abbreviated, time: .shortened))
                         }
                         Button("Esegui backup ora") {
-                            message = backup.backup(store.trips) ? "Backup completato." : (backup.lastError ?? "Backup non riuscito.")
+                            message = backup.backup(store.trips, parking: parking) ? "Backup completato." : (backup.lastError ?? "Backup non riuscito.")
                         }
                         Button("Cambia cartella") { pick(.chooseFolder) }
                         Button("Disattiva backup automatico", role: .destructive) { backup.removeFolder() }
@@ -140,7 +164,7 @@ struct TripsView: View {
                     Text("Backup")
                 } footer: {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Scegli una cartella in iCloud Drive: a ogni viaggio salvato viene aggiornato il file \(BackupManager.fileName).")
+                        Text("Scegli una cartella in iCloud Drive: a ogni viaggio salvato viene aggiornato il file \(BackupManager.fileName); i parcheggi (con le foto ridotte) vanno in \(ParkingStore.backupFileName). Per ripristinare puoi sceglierli tutti e due.")
                         Text("Percorso versione \(Self.appVersion)")
                             .frame(maxWidth: .infinity)
                             .padding(.top, 12)
@@ -155,7 +179,7 @@ struct TripsView: View {
             }
             .fileImporter(isPresented: $showImporter,
                           allowedContentTypes: allowedTypes,
-                          allowsMultipleSelection: fileAction == .importGPX,
+                          allowsMultipleSelection: fileAction != .chooseFolder,
                           onCompletion: handleFiles)
             .sheet(item: $share) { item in
                 ActivityView(items: [item.url])
@@ -249,20 +273,29 @@ struct TripsView: View {
             guard let folder = urls.first else { return }
             backup.setFolder(folder)
             if backup.isConfigured {
-                message = backup.backup(store.trips) ? "Backup automatico attivo." : (backup.lastError ?? "Backup non riuscito.")
+                message = backup.backup(store.trips, parking: parking) ? "Backup automatico attivo." : (backup.lastError ?? "Backup non riuscito.")
             } else {
                 message = backup.lastError
             }
         case .restore:
-            guard let url = urls.first else { return }
-            do {
-                let trips = try BackupManager.readBackup(at: url)
-                let before = store.trips.count
-                store.add(contentsOf: trips)
-                message = "Ripristinati \(store.trips.count - before) viaggi (quelli già presenti sono stati saltati)."
-            } catch {
-                message = "File di backup non valido: \(error.localizedDescription)"
+            // Si possono scegliere insieme il backup dei viaggi e quello dei parcheggi.
+            var lines: [String] = []
+            for url in urls {
+                do {
+                    let data = try BackupManager.readFile(at: url)
+                    if let trips = try? JSONDecoder().decode([Trip].self, from: data) {
+                        let before = store.trips.count
+                        store.add(contentsOf: trips)
+                        lines.append("Ripristinati \(store.trips.count - before) viaggi (quelli già presenti sono stati saltati).")
+                    } else {
+                        let added = try parking.restore(data)
+                        lines.append("Ripristinati \(added) parcheggi.")
+                    }
+                } catch {
+                    lines.append("\(url.lastPathComponent): file di backup non valido.")
+                }
             }
+            message = lines.joined(separator: "\n")
         default:
             var imported: [Trip] = []
             for url in urls {

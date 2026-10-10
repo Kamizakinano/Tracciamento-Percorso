@@ -51,23 +51,42 @@ final class BackupManager: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: work)
     }
 
+    private var pendingParking: DispatchWorkItem?
+
+    /// Backup dei parcheggi (file a parte, con le foto ridotte).
+    func scheduleParkingBackup(_ parking: ParkingStore) {
+        guard isConfigured else { return }
+        pendingParking?.cancel()
+        let work = DispatchWorkItem { [weak self, weak parking] in
+            guard let data = parking?.backupData() else { return }
+            self?.write(data, name: ParkingStore.backupFileName)
+        }
+        pendingParking = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: work)
+    }
+
     @discardableResult
-    func backup(_ trips: [Trip]) -> Bool {
+    func backup(_ trips: [Trip], parking: ParkingStore? = nil) -> Bool {
+        guard let data = try? JSONEncoder().encode(trips) else { return false }
+        guard write(data, name: Self.fileName) else { return false }
+        if let parking, let parkingData = parking.backupData() {
+            return write(parkingData, name: ParkingStore.backupFileName)
+        }
+        return true
+    }
+
+    @discardableResult
+    private func write(_ data: Data, name: String) -> Bool {
         guard let folder = resolveFolder() else { return false }
         let scoped = folder.startAccessingSecurityScopedResource()
         defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
-        let target = folder.appendingPathComponent(Self.fileName)
+        let target = folder.appendingPathComponent(name)
         var failure: Error?
-        do {
-            let data = try JSONEncoder().encode(trips)
-            var coordError: NSError?
-            NSFileCoordinator().coordinate(writingItemAt: target, options: .forReplacing, error: &coordError) { url in
-                do { try data.write(to: url, options: .atomic) } catch { failure = error }
-            }
-            failure = failure ?? coordError
-        } catch {
-            failure = error
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(writingItemAt: target, options: .forReplacing, error: &coordError) { url in
+            do { try data.write(to: url, options: .atomic) } catch { failure = error }
         }
+        failure = failure ?? coordError
         if let failure {
             lastError = "Backup non riuscito: \(failure.localizedDescription)"
             return false
@@ -78,8 +97,8 @@ final class BackupManager: ObservableObject {
         return true
     }
 
-    /// Legge i viaggi da un file di backup scelto dall'utente.
-    static func readBackup(at url: URL) throws -> [Trip] {
+    /// Legge un file scelto dall'utente (backup dei viaggi o dei parcheggi).
+    static func readFile(at url: URL) throws -> Data {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
         var result: Result<Data, Error> = .failure(CocoaError(.fileReadUnknown))
@@ -88,7 +107,12 @@ final class BackupManager: ObservableObject {
             result = Result { try Data(contentsOf: u) }
         }
         if let coordError { throw coordError }
-        return try JSONDecoder().decode([Trip].self, from: result.get())
+        return try result.get()
+    }
+
+    /// Legge i viaggi da un file di backup scelto dall'utente.
+    static func readBackup(at url: URL) throws -> [Trip] {
+        try JSONDecoder().decode([Trip].self, from: readFile(at: url))
     }
 
     private func resolveFolder() -> URL? {

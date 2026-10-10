@@ -17,6 +17,9 @@ struct ContentView: View {
     @EnvironmentObject private var store: TripStore
     @EnvironmentObject private var tracker: LocationTracker
     @EnvironmentObject private var navigation: NavigationSession
+    @EnvironmentObject private var parking: ParkingStore
+    @ObservedObject private var carAudio = CarAudioMonitor.shared
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var explore = ExploreService()
     @StateObject private var planner = RoutePlanner()
     @StateObject private var transit = TransitPlanner()
@@ -48,6 +51,10 @@ struct ContentView: View {
     @State private var lastSearchRegion: MKCoordinateRegion?
     @State private var showSearchHere = false
     @State private var searchingHere = false
+    @State private var showParking = false
+    @State private var parkingStartsWithHistory = false
+    /// "Portami all'auto": avvia la navigazione appena il percorso a piedi è pronto.
+    @State private var walkToCarPending = false
 
     /// Mezzo usato per strade nuove e percorsi.
     private var mode: TravelMode { TravelMode(rawValue: travelMode) ?? tracker.currentMode }
@@ -65,6 +72,8 @@ struct ContentView: View {
                     results: searchResults,
                     resultsVersion: resultsVersion,
                     fitResults: fitResults,
+                    parking: parking.current,
+                    parkingHints: parkingHints,
                     mapType: mapType,
                     place: place,
                     navigating: navigation.isActive,
@@ -73,7 +82,8 @@ struct ContentView: View {
                     zoomRequest: $zoomRequest,
                     onRegionChange: regionChanged,
                     onUserLocation: { mapState.userLocation = $0 },
-                    onSelectResult: selectResult)
+                    onSelectResult: selectResult,
+                    onSelectParking: { openParking() })
                 .ignoresSafeArea()
 
             if navigation.isActive {
@@ -86,7 +96,38 @@ struct ContentView: View {
             follow = store.trips.isEmpty || tracker.isRecording
             store.setFilter(Settings.filter)
             tracker.requestPermissionIfNeeded()
+            CarAudioMonitor.shared.start()
             handleLaunchArguments()
+        }
+        .onChange(of: scenePhase) { phase in
+            // La Live Activity del ticket si può avviare solo con l'app aperta.
+            if phase == .active { ParkingActivityManager.shared.update(for: parking.current) }
+        }
+        .onReceive(NotificationHandler.shared.$openParking.dropFirst()) { _ in openParking() }
+        .onReceive(planner.$options) { options in
+            guard walkToCarPending, !options.isEmpty else { return }
+            walkToCarPending = false
+            // `options` arriva prima che il planner lo salvi: avvia al giro successivo.
+            DispatchQueue.main.async { startNavigation() }
+        }
+        .sheet(isPresented: $showParking) {
+            ParkingView(userLocation: mapState.userLocation ?? tracker.currentLocation?.coordinate,
+                        startWithHistory: parkingStartsWithHistory,
+                        onPark: parkHere,
+                        onWalk: walkToCar,
+                        onShow: showParkingOnMap)
+                .environmentObject(parking)
+        }
+        .alert("È il Bluetooth della tua auto?", isPresented: Binding(
+            get: { carAudio.askName != nil && !navigation.isActive },
+            set: { if !$0 { carAudio.askName = nil } })) {
+            Button("Sì, è l'auto") {
+                UserDefaults.standard.set(carAudio.askName ?? "", forKey: Settings.carBluetoothKey)
+                carAudio.askName = nil
+            }
+            Button("No", role: .cancel) { carAudio.askName = nil }
+        } message: {
+            Text("Quando l'iPhone si scollega da «\(carAudio.askName ?? "")», Percorso salva da solo dove hai parcheggiato.")
         }
         .onChange(of: store.version) { _ in
             if let r = mapState.region { explore.refresh(region: r, mode: mode, index: store.index) }
@@ -112,9 +153,12 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showTrips) {
-            TripsView(focus: $focus)
+            TripsView(focus: $focus,
+                      onPark: { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { parkHere() } },
+                      onOpenParking: { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { openParking() } })
                 .environmentObject(store)
                 .environmentObject(tracker)
+                .environmentObject(parking)
         }
         .sheet(isPresented: $showStats) {
             StatsView().environmentObject(store)
@@ -166,7 +210,11 @@ struct ContentView: View {
             }
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
-                    if let place { placeChip(place) }
+                    if let place {
+                        placeChip(place)
+                    } else if let car = parking.current, searchResults.isEmpty {
+                        carChip(car)
+                    }
                     if let text = info ?? explore.message ?? planner.message { infoChip(text) }
                 }
                 Spacer()
@@ -174,6 +222,7 @@ struct ContentView: View {
                     roundButton("magnifyingglass") { search = SearchRequest(query: "") }
                     mapStyleMenu
                     exploreButton
+                    parkingButton
                 }
                 .shadow(radius: 4)
             }
@@ -454,6 +503,14 @@ struct ContentView: View {
                     .lineLimit(1)
             }
             modeRow
+            if routeMode == .car, let dest = planner.destination,
+               let hint = ParkingStore.hint(for: dest.coordinate, spots: parking.spots) {
+                Text(hint.text)
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(.teal)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if routeMode == .transit {
                 transitContent
             } else {
@@ -733,6 +790,7 @@ struct ContentView: View {
     }
 
     private func closeRoute() {
+        walkToCarPending = false
         planner.clear()
         transit.clear()
         place = nil
@@ -749,6 +807,91 @@ struct ContentView: View {
         planner.plan(from: start, origin: origin, to: place, mode: travel, index: store.index)
         planner.computeETAs(from: start, to: place.coordinate)
         transit.plan(from: start, to: place.coordinate)
+    }
+
+    // MARK: - Parcheggio
+
+    private var parkingButton: some View {
+        Group {
+            if parking.current != nil {
+                Button { openParking() } label: {
+                    circleIcon("car.fill", tint: .white, background: AnyShapeStyle(Color.blue))
+                }
+            } else {
+                Menu {
+                    Button(action: parkHere) { Label("Ho parcheggiato qui", systemImage: "parkingsign.circle") }
+                    Button { openParking() } label: { Label("Storico parcheggi", systemImage: "clock.arrow.circlepath") }
+                } label: {
+                    circleIcon("parkingsign")
+                }
+            }
+        }
+        .accessibilityLabel("Parcheggio")
+    }
+
+    private func carChip(_ car: ParkingSpot) -> some View {
+        Button { openParking() } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "car.fill").foregroundColor(.blue)
+                Text(carDistanceText(car))
+                if let expiry = car.expiry, expiry > Date() {
+                    Image(systemName: "timer").foregroundColor(.orange)
+                    Text(timerInterval: Date()...expiry, countsDown: true)
+                        .monospacedDigit()
+                        .foregroundColor(.orange)
+                        .frame(maxWidth: 70, alignment: .leading)
+                }
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundColor(Color(uiColor: .label))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.regularMaterial, in: Capsule())
+            .shadow(radius: 4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func carDistanceText(_ car: ParkingSpot) -> String {
+        guard let me = mapState.userLocation ?? tracker.currentLocation?.coordinate else { return "La tua auto" }
+        return "Auto a \(Geo.formatShort(Geo.distance(me, car.coordinate)))"
+    }
+
+    /// Parcheggi passati vicino alla destinazione (in auto), mostrati sulla mappa.
+    private var parkingHints: [ParkingSpot] {
+        guard routeMode == .car, let dest = planner.destination else { return [] }
+        return Array(ParkingStore.nearby(parking.spots.filter { !$0.isActive }, to: dest.coordinate, within: 400).prefix(10))
+    }
+
+    private func openParking(history: Bool = false) {
+        parkingStartsWithHistory = history
+        showParking = true
+    }
+
+    private func parkHere() {
+        guard let here = mapState.userLocation ?? tracker.currentLocation?.coordinate else {
+            info = "Posizione attuale non disponibile."
+            return
+        }
+        parking.park(at: here, source: .manual)
+        openParking()
+    }
+
+    private func walkToCar(_ spot: ParkingSpot) {
+        clearResults()
+        let p = Place(name: "La tua auto", coordinate: spot.coordinate, address: spot.address)
+        place = p
+        walkToCarPending = true
+        planRoute(to: p, mode: .foot)
+    }
+
+    private func showParkingOnMap(_ spot: ParkingSpot) {
+        if spot.isActive {
+            zoomRequest = MKCoordinateRegion(center: spot.coordinate, latitudinalMeters: 600, longitudinalMeters: 600)
+        } else {
+            place = Place(name: "Parcheggio del \(spot.date.formatted(date: .abbreviated, time: .omitted))",
+                          coordinate: spot.coordinate, address: spot.address)
+        }
     }
 
     // MARK: - Strade nuove
@@ -810,6 +953,21 @@ struct ContentView: View {
             guard let i = args.firstIndex(of: key), i + 1 < args.count else { return nil }
             return args[i + 1]
         }
+        if args.contains("-parkDemo") {
+            let home = CLLocationCoordinate2D(latitude: 45.4642, longitude: 9.1900)
+            parking.loadDemo(near: home)
+            if let car = parking.current, value("-routeTo") == nil {
+                // Inquadra te e l'auto.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                    zoomRequest = MKCoordinateRegion(
+                        center: CLLocationCoordinate2D(latitude: (home.latitude + car.lat) / 2,
+                                                       longitude: (home.longitude + car.lon) / 2),
+                        latitudinalMeters: 900, longitudinalMeters: 900)
+                }
+            }
+        }
+        if args.contains("-showParking") { openParking() }
+        if args.contains("-parkingHistory") { openParking(history: true) }
         if args.contains("-showTrips") { showTrips = true }
         if args.contains("-stats") { showStats = true }
         if let q = value("-search") { search = SearchRequest(query: q) }

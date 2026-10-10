@@ -55,6 +55,16 @@ Così durante i viaggi puoi scegliere strade nuove.
 - **Live Activity** sul blocco schermo e nella Dynamic Island durante la
   registrazione: km, tempo, % di strade nuove e avviso. iOS permette di
   avviarla solo con l'app aperta.
+- **Parcheggio intelligente** (pulsante 🅿️ sulla mappa o menu ☰): quando un
+  viaggio in auto finisce o prosegui a piedi, l'app salva da sola dove hai
+  lasciato l'auto (serve che stia registrando: Avvia o "Registra sempre"); lo
+  stesso quando l'iPhone si scollega da CarPlay o dal Bluetooth scelto come
+  "auto". C'è anche "Ho parcheggiato qui". Sulla mappa compare l'auto 🚗 con la
+  distanza; "Portami all'auto" avvia la navigazione a piedi. Puoi impostare la
+  scadenza del ticket o del disco orario (notifica 5/10/15/30 minuti prima e
+  conto alla rovescia nella Live Activity), una nota e una foto. Lo storico
+  mostra tutti i parcheggi e, cercando una destinazione in auto, la scheda del
+  percorso dice dove avevi già trovato posto in zona (segnaposto "P").
 - **Statistiche**: km, tempo, km su strade nuove, divisione per mezzo, zone più
   esplorate, per settimana / mese / anno / sempre.
 - **Backup automatico**: scegli una cartella (per esempio in iCloud Drive) e a
@@ -114,6 +124,7 @@ era rimasta.
 | `ios/Percorso/ExploreService.swift` | Strade nuove da OpenStreetMap |
 | `ios/Percorso/RoutePlanner.swift` | Percorso con più strade nuove |
 | `ios/Percorso/StatsView.swift` | Statistiche |
+| `ios/Percorso/Parking.swift`, `ParkingView.swift` | Parcheggio: rilevamento, storico, ticket, Bluetooth |
 | `ios/Percorso/BackupManager.swift` | Backup automatico |
 | `ios/Percorso/VoiceAlert.swift`, `LiveActivityManager.swift` | Avviso vocale e Live Activity |
 | `ios/LiveActivity/`, `ios/Shared/` | Estensione che disegna la Live Activity |
