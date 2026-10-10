@@ -65,17 +65,24 @@ struct ParkingView: View {
                 }
 
                 Section {
-                    NavigationLink(isActive: $showHistory) {
-                        ParkingHistoryView(onShow: { spot in
-                            dismiss()
-                            onShow(spot)
-                        })
-                    } label: {
-                        Label("Storico parcheggi (\(parking.spots.count))", systemImage: "clock.arrow.circlepath")
+                    Button { showHistory = true } label: {
+                        HStack {
+                            Label("Storico parcheggi (\(parking.spots.count))", systemImage: "clock.arrow.circlepath")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(Color(uiColor: .tertiaryLabel))
+                        }
                     }
                 }
 
                 settingsSection
+            }
+            .navigationDestination(isPresented: $showHistory) {
+                ParkingHistoryView(onShow: { spot in
+                    dismiss()
+                    onShow(spot)
+                })
             }
             .navigationTitle("Parcheggio")
             .navigationBarTitleDisplayMode(.inline)

@@ -343,6 +343,16 @@ struct MapView: UIViewRepresentable {
                 }
                 return view
             }
+            if let pin = annotation as? MKPointAnnotation {
+                // Destinazione: sempre visibile, anche vicino ai segnaposto dei parcheggi.
+                let id = "place"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: pin, reuseIdentifier: id)
+                view.annotation = pin
+                view.displayPriority = .required
+                view.canShowCallout = true
+                return view
+            }
             guard let result = annotation as? ResultAnnotation else { return nil }
             let id = "result"
             let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView
