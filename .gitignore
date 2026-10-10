@@ -6,3 +6,4 @@ ios/Payload/
 *.ipa
 .DS_Store
 xcuserdata/
+ios/build-test/

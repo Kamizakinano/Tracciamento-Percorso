@@ -2,10 +2,15 @@ name: Build iOS (IPA per Sideloadly)
 
 on:
   push:
+    branches-ignore:
+      - ipa-build
     paths:
       - "ios/**"
       - ".github/workflows/ios.yml"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -19,6 +24,24 @@ jobs:
       - name: Genera il progetto Xcode
         working-directory: ios
         run: xcodegen generate
+
+      - name: Test
+        working-directory: ios
+        run: |
+          set -o pipefail
+          # Primo iPhone disponibile nel simulatore installato sul runner.
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          devs = json.load(sys.stdin)["devices"]
+          print(next(d["udid"] for rt, ds in sorted(devs.items(), reverse=True)
+                     if "iOS" in rt for d in ds if d["name"].startswith("iPhone")))')
+          echo "Simulatore: $UDID"
+          xcodebuild test \
+            -project Percorso.xcodeproj \
+            -scheme Percorso \
+            -destination "id=$UDID" \
+            -derivedDataPath build-test \
+            CODE_SIGNING_ALLOWED=NO
 
       - name: Compila senza firma (la firma la fa Sideloadly)
         working-directory: ios
@@ -48,3 +71,20 @@ jobs:
         with:
           name: Percorso-ipa
           path: ios/Percorso.ipa
+
+      # Ultima IPA sul branch ipa-build (un solo commit, sovrascritto a ogni build):
+      # https://github.com/<owner>/<repo>/raw/ipa-build/Percorso.ipa
+      - name: Pubblica l'IPA sul branch ipa-build
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          OUT=$(mktemp -d)
+          cp ios/Percorso.ipa "$OUT/"
+          cd "$OUT"
+          printf 'Commit: %s\nBranch: %s\nData: %s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%Y-%m-%dT%H:%MZ)" > BUILD.txt
+          git init -q -b ipa-build
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -qm "IPA da ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ipa-build

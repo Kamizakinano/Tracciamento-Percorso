@@ -30,12 +30,13 @@ Così durante i viaggi puoi scegliere strade nuove.
 ## Installazione con Sideloadly
 
 L'`.ipa` viene compilato automaticamente da GitHub Actions (serve un Mac, che
-GitHub mette a disposizione) a ogni modifica della cartella `ios/`.
+GitHub mette a disposizione) a ogni modifica della cartella `ios/`, dopo
+aver eseguito i test automatici (`ios/PercorsoTests`).
 
-1. Su GitHub apri la scheda **Actions → Build iOS (IPA per Sideloadly)**,
-   entra nell'ultima esecuzione riuscita e scarica l'artifact
-   **Percorso-ipa** (è uno zip: estrai `Percorso.ipa`).
-   Puoi anche avviarla a mano con **Run workflow**.
+1. Scarica l'ultima versione: **https://github.com/Kamizakinano/Tracciamento-Percorso/raw/ipa-build/Percorso.ipa**
+   (viene pubblicata solo se i test automatici passano). In alternativa:
+   scheda **Actions → Build iOS (IPA per Sideloadly)**, ultima esecuzione
+   riuscita, artifact **Percorso-ipa**.
 2. Apri **Sideloadly**, collega l'iPhone, trascina `Percorso.ipa`, inserisci il
    tuo Apple ID e premi **Start**.
 3. Sull'iPhone: *Impostazioni → Generali → VPN e gestione dispositivi* →
