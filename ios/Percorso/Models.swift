@@ -351,6 +351,8 @@ struct Place: Identifiable, Equatable {
     let id = UUID()
     let name: String
     let coordinate: CLLocationCoordinate2D
+    /// Indirizzo (per i risultati della ricerca).
+    var address: String? = nil
 
     static func == (a: Place, b: Place) -> Bool { a.id == b.id }
 }

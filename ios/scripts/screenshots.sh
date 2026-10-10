@@ -54,6 +54,8 @@ sleep 10 && xcrun simctl io "$UDID" screenshot "$OUT/5-percorso.png"     # atten
 shot 6-statistiche -stats
 shot 7-impostazioni -showTrips
 shot 8-ricerca -search "Duomo di Milano"
+shot 11-negozi -searchAll "Lidl"
+sleep 8 && xcrun simctl io "$UDID" screenshot "$OUT/11-negozi.png"  # attende i risultati
 shot 10-mezzi -routeTo "45.4859,9.2048,Stazione Centrale" -transit
 sleep 12 && xcrun simctl io "$UDID" screenshot "$OUT/10-mezzi.png"  # attende Transitous
 shot 9-navigazione -routeTo "45.4859,9.2048,Stazione Centrale" -navigate

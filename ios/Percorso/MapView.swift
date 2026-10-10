@@ -13,6 +13,9 @@ struct MapView: UIViewRepresentable {
     let route: RouteOption?
     /// Itinerario con i mezzi pubblici da mostrare (al posto di `route`).
     var transit: TransitItinerary? = nil
+    /// Risultati di una ricerca (es. tutti i Lidl della zona).
+    var results: [Place] = []
+    var resultsVersion = 0
     let mapType: MKMapType
     let place: Place?
     /// Navigazione in corso: mappa inclinata che segue la direzione di marcia.
@@ -23,6 +26,8 @@ struct MapView: UIViewRepresentable {
     @Binding var zoomRequest: MKCoordinateRegion?
     var onRegionChange: (MKCoordinateRegion) -> Void = { _ in }
     var onUserLocation: (CLLocationCoordinate2D) -> Void = { _ in }
+    /// Tocco sul pulsante "percorso" nel fumetto di un risultato.
+    var onSelectResult: (Place) -> Void = { _ in }
 
     /// Colori per numero di passaggi: 1 · 2-3 · 4 o più.
     static let levelColors: [UIColor] = [.systemYellow, .systemOrange, .systemRed]
@@ -112,6 +117,21 @@ struct MapView: UIViewRepresentable {
                     DispatchQueue.main.async { follow = false }
                     return
                 }
+            }
+        }
+
+        if c.resultsVersion != resultsVersion {
+            map.removeAnnotations(c.resultAnnotations)
+            c.resultAnnotations = results.map { ResultAnnotation(place: $0) }
+            map.addAnnotations(c.resultAnnotations)
+            c.resultsVersion = resultsVersion
+            if !results.isEmpty {
+                map.setUserTrackingMode(.none, animated: false)
+                var coords = results.map(\.coordinate)
+                if let user = map.userLocation.location?.coordinate { coords.append(user) }
+                Self.fit(map, coords: coords)
+                DispatchQueue.main.async { follow = false }
+                return
             }
         }
 
@@ -219,6 +239,8 @@ struct MapView: UIViewRepresentable {
         var routeOverlay: MKOverlay?
         var currentOverlay: MKPolyline?
         var transitID: UUID?
+        var resultsVersion = 0
+        var resultAnnotations: [ResultAnnotation] = []
         var transitOverlays: [MKOverlay] = []
         var currentCount = -1
         var placeID: UUID?
@@ -275,6 +297,27 @@ struct MapView: UIViewRepresentable {
             }
         }
 
+        func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            guard let result = annotation as? ResultAnnotation else { return nil }
+            let id = "result"
+            let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView
+                ?? MKMarkerAnnotationView(annotation: result, reuseIdentifier: id)
+            view.annotation = result
+            view.markerTintColor = .systemIndigo
+            view.glyphImage = UIImage(systemName: "bag.fill")
+            view.canShowCallout = true
+            view.displayPriority = .required
+            let button = UIButton(type: .system)
+            button.setImage(UIImage(systemName: "arrow.triangle.turn.up.right.circle.fill"), for: .normal)
+            button.frame = CGRect(x: 0, y: 0, width: 36, height: 36)
+            view.rightCalloutAccessoryView = button
+            return view
+        }
+
+        func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, calloutAccessoryControlTapped control: UIControl) {
+            if let result = view.annotation as? ResultAnnotation { parent.onSelectResult(result.place) }
+        }
+
         func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
             if let loc = userLocation.location { parent.onUserLocation(loc.coordinate) }
         }
@@ -289,4 +332,14 @@ struct MapView: UIViewRepresentable {
 final class ColoredPolyline: MKPolyline {
     var color: UIColor = .systemPurple
     var dashed = false
+}
+
+/// Segnaposto di un risultato della ricerca.
+final class ResultAnnotation: NSObject, MKAnnotation {
+    let place: Place
+    var coordinate: CLLocationCoordinate2D { place.coordinate }
+    var title: String? { place.name }
+    var subtitle: String? { place.address }
+
+    init(place: Place) { self.place = place }
 }

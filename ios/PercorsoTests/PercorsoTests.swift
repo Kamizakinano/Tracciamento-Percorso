@@ -327,4 +327,16 @@ final class PercorsoTests: XCTestCase {
         XCTAssertEqual(RouteMode.allCases.count, 4)
         XCTAssertEqual(4400 / bikeSpeed, 1000, accuracy: 1, "4,4 km in bici ~ 17 minuti")
     }
+
+    // MARK: - Ricerca di tutti i negozi
+
+    func testResultsSortedByDistance() {
+        let me = CLLocationCoordinate2D(latitude: 45.4642, longitude: 9.19)
+        let far = Place(name: "Lidl lontano", coordinate: .init(latitude: 45.50, longitude: 9.19), address: "Via A")
+        let near = Place(name: "Lidl vicino", coordinate: .init(latitude: 45.466, longitude: 9.19))
+        let mid = Place(name: "Lidl medio", coordinate: .init(latitude: 45.48, longitude: 9.19))
+        XCTAssertEqual(PlaceSearch.sorted([far, near, mid], from: me).map(\.name), ["Lidl vicino", "Lidl medio", "Lidl lontano"])
+        XCTAssertEqual(PlaceSearch.sorted([far, near], from: nil).map(\.name), ["Lidl lontano", "Lidl vicino"])
+        XCTAssertFalse(PlaceSearch.categories.isEmpty)
+    }
 }

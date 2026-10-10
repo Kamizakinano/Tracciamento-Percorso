@@ -38,6 +38,9 @@ struct ContentView: View {
     @State private var info: String?
     @State private var routeMode: RouteMode = .car
     @State private var showTransitDetail = false
+    @State private var searchResults: [Place] = []
+    @State private var resultsTitle = ""
+    @State private var resultsVersion = 0
 
     /// Mezzo usato per strade nuove e percorsi.
     private var mode: TravelMode { TravelMode(rawValue: travelMode) ?? tracker.currentMode }
@@ -52,6 +55,8 @@ struct ContentView: View {
                     exploreVersion: explore.version,
                     route: navigation.route ?? (routeMode == .transit ? nil : planner.current),
                     transit: routeMode == .transit && !navigation.isActive && planner.destination != nil ? transit.current : nil,
+                    results: searchResults,
+                    resultsVersion: resultsVersion,
                     mapType: mapType,
                     place: place,
                     navigating: navigation.isActive,
@@ -59,7 +64,8 @@ struct ContentView: View {
                     focus: $focus,
                     zoomRequest: $zoomRequest,
                     onRegionChange: regionChanged,
-                    onUserLocation: { mapState.userLocation = $0 })
+                    onUserLocation: { mapState.userLocation = $0 },
+                    onSelectResult: selectResult)
                 .ignoresSafeArea()
 
             if navigation.isActive {
@@ -78,7 +84,8 @@ struct ContentView: View {
             if let r = mapState.region { explore.refresh(region: r, mode: mode, index: store.index) }
         }
         .sheet(item: $search) { request in
-            RouteSearchView(region: mapState.region ?? userRegion, initialDestination: request.query, mode: mode) { from, to, mode in
+            RouteSearchView(region: mapState.region ?? userRegion, initialDestination: request.query, mode: mode,
+                            onShowAll: showResults) { from, to, mode in
                 place = to
                 planRoute(to: to, from: from, mode: mode)
             }
@@ -144,7 +151,11 @@ struct ContentView: View {
             }
             oldRoadBanner
             Spacer()
-            if planner.destination != nil { routeCard }
+            if planner.destination != nil {
+                routeCard
+            } else if !searchResults.isEmpty {
+                resultsCard
+            }
             controls
         }
         .padding()
@@ -557,6 +568,79 @@ struct ContentView: View {
         return routeMode == .bike ? text + " (stima)" : text
     }
 
+    // MARK: - Risultati della ricerca (es. tutti i Lidl)
+
+    private var resultsCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("\(searchResults.count) risultati per «\(resultsTitle)»")
+                    .font(.headline)
+                Spacer()
+                Button(action: clearResults) {
+                    Image(systemName: "xmark.circle.fill").font(.title3).foregroundStyle(.secondary)
+                }
+            }
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(searchResults) { result in
+                        Button { selectResult(result) } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "bag.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.indigo)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(result.name).font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
+                                    if let address = result.address {
+                                        Text(address).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                }
+                                Spacer()
+                                if let d = distanceText(result) {
+                                    Text(d).font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                            }
+                            .padding(.vertical, 8)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Divider()
+                    }
+                }
+            }
+            .frame(maxHeight: 230)
+        }
+        .padding()
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .shadow(radius: 4)
+    }
+
+    private func distanceText(_ place: Place) -> String? {
+        guard let me = mapState.userLocation ?? tracker.currentLocation?.coordinate else { return nil }
+        return Geo.formatShort(Geo.distance(me, place.coordinate))
+    }
+
+    private func showResults(_ title: String, _ results: [Place]) {
+        planner.clear()
+        transit.clear()
+        place = nil
+        resultsTitle = title
+        searchResults = PlaceSearch.sorted(results, from: mapState.userLocation ?? tracker.currentLocation?.coordinate)
+        resultsVersion += 1
+    }
+
+    private func clearResults() {
+        searchResults = []
+        resultsVersion += 1
+    }
+
+    /// Scelto un risultato: calcola il percorso fino a lì.
+    private func selectResult(_ result: Place) {
+        clearResults()
+        place = result
+        planRoute(to: result)
+    }
+
     private func selectMode(_ m: RouteMode) {
         routeMode = m
         guard let travel = m.travelMode, let start = planner.start, let dest = planner.destination else { return }
@@ -637,6 +721,16 @@ struct ContentView: View {
         if args.contains("-showTrips") { showTrips = true }
         if args.contains("-stats") { showStats = true }
         if let q = value("-search") { search = SearchRequest(query: q) }
+        if let q = value("-searchAll") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                Task {
+                    let results = await PlaceSearch.search(q, region: userRegion.map {
+                        MKCoordinateRegion(center: $0.center, latitudinalMeters: 5000, longitudinalMeters: 5000)
+                    })
+                    await MainActor.run { showResults(q, results) }
+                }
+            }
+        }
         if args.contains("-explore") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { toggleExplore() }
         }

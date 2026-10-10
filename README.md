@@ -21,6 +21,10 @@ Così durante i viaggi puoi scegliere strade nuove.
 - **Ricerca "Dove vuoi andare?"** (lente): partenza (di solito "La mia
   posizione") e destinazione, suggerimenti vicini a te, luoghi recenti, scambio
   ⇅ e scelta del mezzo. Scelta la destinazione, l'app calcola i percorsi.
+- **Tutti i negozi della zona**: scrivi per esempio "Lidl" (o "farmacia",
+  "benzina"…) e premi Cerca, oppure usa le scorciatoie (Supermercati, Benzina,
+  Farmacie, Bar, Ristoranti, Parcheggi, Bancomat): tutti i risultati compaiono
+  sulla mappa e in un elenco ordinato per distanza; toccane uno per il percorso.
 - **Percorso con più strade nuove**: l'app confronta i percorsi di Apple più due
   varianti e propone (in viola) quello con più strade nuove senza allungare
   troppo; con ‹ › vedi le alternative.

@@ -36,6 +36,48 @@ final class SearchCompleter: NSObject, ObservableObject, MKLocalSearchCompleterD
     }
 }
 
+/// Ricerca di tutti i luoghi corrispondenti (es. tutti i Lidl della zona).
+enum PlaceSearch {
+    /// Scorciatoie mostrate quando il campo della destinazione è vuoto.
+    static let categories: [(label: String, query: String, icon: String)] = [
+        ("Supermercati", "supermercato", "cart.fill"),
+        ("Benzina", "distributore di benzina", "fuelpump.fill"),
+        ("Farmacie", "farmacia", "cross.case.fill"),
+        ("Bar", "bar caffè", "cup.and.saucer.fill"),
+        ("Ristoranti", "ristorante", "fork.knife"),
+        ("Parcheggi", "parcheggio", "parkingsign.circle.fill"),
+        ("Bancomat", "bancomat", "banknote.fill"),
+    ]
+
+    static func search(_ text: String, region: MKCoordinateRegion?) async -> [Place] {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = text
+        request.resultTypes = [.pointOfInterest, .address]
+        if let region { request.region = region }
+        guard let response = try? await MKLocalSearch(request: request).start() else { return [] }
+        var seen = Set<String>()
+        return response.mapItems.compactMap { item in
+            let c = item.placemark.coordinate
+            // Stesso negozio restituito due volte: tienine uno.
+            let key = "\((c.latitude * 2000).rounded()),\((c.longitude * 2000).rounded())"
+            guard seen.insert(key).inserted else { return nil }
+            return Place(name: item.name ?? text, coordinate: c, address: address(of: item.placemark))
+        }
+    }
+
+    static func address(of p: MKPlacemark) -> String? {
+        let street = [p.thoroughfare, p.subThoroughfare].compactMap { $0 }.joined(separator: " ")
+        let parts = [street.isEmpty ? nil : street, p.locality].compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: ", ")
+    }
+
+    /// Ordina per distanza da un punto.
+    static func sorted(_ places: [Place], from origin: CLLocationCoordinate2D?) -> [Place] {
+        guard let origin else { return places }
+        return places.sorted { Geo.distance(origin, $0.coordinate) < Geo.distance(origin, $1.coordinate) }
+    }
+}
+
 /// Ultime destinazioni cercate.
 enum RecentPlaces {
     private static let key = "recentPlaces"
@@ -65,6 +107,8 @@ struct RouteSearchView: View {
     let region: MKCoordinateRegion?
     /// `from` nil = la mia posizione.
     let onPlan: (_ from: Place?, _ to: Place, _ mode: TravelMode) -> Void
+    /// Mostra sulla mappa tutti i risultati di una ricerca (es. tutti i Lidl).
+    let onShowAll: (_ query: String, _ results: [Place]) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var completer: SearchCompleter
@@ -79,9 +123,11 @@ struct RouteSearchView: View {
     @FocusState private var focus: Field?
 
     init(region: MKCoordinateRegion?, initialDestination: String = "", mode: TravelMode,
+         onShowAll: @escaping (_ query: String, _ results: [Place]) -> Void,
          onPlan: @escaping (_ from: Place?, _ to: Place, _ mode: TravelMode) -> Void) {
         self.region = region
         self.onPlan = onPlan
+        self.onShowAll = onShowAll
         _completer = StateObject(wrappedValue: SearchCompleter(query: initialDestination, region: region))
         _toText = State(initialValue: initialDestination)
         _mode = State(initialValue: mode)
@@ -107,6 +153,31 @@ struct RouteSearchView: View {
                     if activeField == .from {
                         Button(action: useMyLocation) {
                             Label("La mia posizione", systemImage: "location.fill")
+                        }
+                    }
+                    if activeField == .to {
+                        let query = toText.trimmingCharacters(in: .whitespaces)
+                        if query.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(PlaceSearch.categories, id: \.query) { cat in
+                                        Button { showAll(cat.query, title: cat.label) } label: {
+                                            Label(cat.label, systemImage: cat.icon)
+                                                .font(.subheadline)
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 8)
+                                                .background(Color.secondary.opacity(0.12), in: Capsule())
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                            .listRowSeparator(.hidden)
+                        } else if to == nil {
+                            Button { showAll(query, title: query) } label: {
+                                Label("Mostra tutti i risultati per «\(query)» sulla mappa", systemImage: "magnifyingglass")
+                                    .font(.subheadline.weight(.semibold))
+                            }
                         }
                     }
                     if activeText.isEmpty && !recents.isEmpty {
@@ -173,7 +244,7 @@ struct RouteSearchView: View {
                     TextField("Dove vuoi andare?", text: $toText)
                         .focused($focus, equals: .to)
                         .submitLabel(.search)
-                        .onSubmit { searchText(toText) }
+                        .onSubmit { showAll(toText, title: toText) }
                 }
                 .padding(.vertical, 10)
             }
@@ -218,6 +289,26 @@ struct RouteSearchView: View {
         RecentPlaces.add(to)
         onPlan(from, to, mode)
         dismiss()
+    }
+
+    /// Cerca tutti i luoghi corrispondenti e li mostra sulla mappa.
+    private func showAll(_ text: String, title: String) {
+        let query = text.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return }
+        searching = true
+        message = nil
+        Task {
+            let results = await PlaceSearch.search(query, region: region)
+            await MainActor.run {
+                searching = false
+                if results.isEmpty {
+                    message = "Nessun risultato per «\(query)» in questa zona."
+                } else {
+                    onShowAll(title, results)
+                    dismiss()
+                }
+            }
+        }
     }
 
     private func searchText(_ text: String) {
