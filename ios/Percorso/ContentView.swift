@@ -43,6 +43,11 @@ struct ContentView: View {
     @State private var resultsVersion = 0
     /// Centro usato per ordinare i risultati quando la posizione non è disponibile.
     @State private var resultsOrigin: CLLocationCoordinate2D?
+    @State private var resultsQuery = ""
+    @State private var fitResults = true
+    @State private var lastSearchRegion: MKCoordinateRegion?
+    @State private var showSearchHere = false
+    @State private var searchingHere = false
 
     /// Mezzo usato per strade nuove e percorsi.
     private var mode: TravelMode { TravelMode(rawValue: travelMode) ?? tracker.currentMode }
@@ -59,6 +64,7 @@ struct ContentView: View {
                     transit: routeMode == .transit && !navigation.isActive && planner.destination != nil ? transit.current : nil,
                     results: searchResults,
                     resultsVersion: resultsVersion,
+                    fitResults: fitResults,
                     mapType: mapType,
                     place: place,
                     navigating: navigation.isActive,
@@ -138,6 +144,26 @@ struct ContentView: View {
     private var mainOverlay: some View {
         VStack(spacing: 10) {
             statusBar
+            if showSearchHere && !searchResults.isEmpty && planner.destination == nil {
+                Button(action: searchHere) {
+                    HStack(spacing: 6) {
+                        if searchingHere {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                        Text("Cerca in questa zona")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(Color.indigo, in: Capsule())
+                    .shadow(radius: 4)
+                }
+                .disabled(searchingHere)
+                .transition(.opacity)
+            }
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 8) {
                     if let place { placeChip(place) }
@@ -638,17 +664,55 @@ struct ContentView: View {
         return Geo.formatShort(Geo.distance(me, place.coordinate))
     }
 
-    private func showResults(_ title: String, _ results: [Place]) {
+    private func showResults(_ title: String, _ query: String, _ results: [Place]) {
+        showResults(title, query, results, fit: true)
+    }
+
+    private func showResults(_ title: String, _ query: String, _ results: [Place], fit: Bool) {
         planner.clear()
         transit.clear()
         place = nil
         resultsTitle = title
+        resultsQuery = query
+        fitResults = fit
+        showSearchHere = false
+        // Dopo l'inquadratura automatica la zona di riferimento è quella nuova.
+        lastSearchRegion = fit ? nil : mapState.region
         resultsOrigin = mapState.userLocation ?? tracker.currentLocation?.coordinate ?? mapState.region?.center
         searchResults = PlaceSearch.sorted(results, from: resultsOrigin)
         resultsVersion += 1
     }
 
+    /// Ripete la stessa ricerca nella zona che si sta guardando.
+    private func searchHere() {
+        guard let region = mapState.region else { return }
+        searchingHere = true
+        let title = resultsTitle, query = resultsQuery
+        Task {
+            let results = await PlaceSearch.search(query, region: region)
+            await MainActor.run {
+                searchingHere = false
+                if results.isEmpty {
+                    showSearchHere = false
+                    lastSearchRegion = region
+                    info = "Nessun risultato per «\(title)» in questa zona."
+                } else {
+                    showResults(title, query, results, fit: false)
+                }
+            }
+        }
+    }
+
+    /// La mappa è stata spostata o ingrandita abbastanza da giustificare una nuova ricerca.
+    static func movedEnough(from a: MKCoordinateRegion, to b: MKCoordinateRegion) -> Bool {
+        let dLat = abs(a.center.latitude - b.center.latitude) / max(a.span.latitudeDelta, 1e-6)
+        let dLon = abs(a.center.longitude - b.center.longitude) / max(a.span.longitudeDelta, 1e-6)
+        let zoom = b.span.latitudeDelta / max(a.span.latitudeDelta, 1e-6)
+        return dLat > 0.35 || dLon > 0.35 || zoom > 1.8 || zoom < 0.55
+    }
+
     private func clearResults() {
+        showSearchHere = false
         searchResults = []
         resultsVersion += 1
     }
@@ -712,6 +776,15 @@ struct ContentView: View {
     private func regionChanged(_ region: MKCoordinateRegion) {
         mapState.region = region
         explore.regionChanged(region, mode: mode, index: store.index)
+        guard !searchResults.isEmpty else { return }
+        DispatchQueue.main.async {
+            guard let last = lastSearchRegion else {
+                lastSearchRegion = region // prima zona dopo l'inquadratura dei risultati
+                return
+            }
+            let moved = Self.movedEnough(from: last, to: region)
+            if moved != showSearchHere { withAnimation { showSearchHere = moved } }
+        }
     }
 
     // MARK: - Utilità
@@ -746,7 +819,18 @@ struct ContentView: View {
                     let results = await PlaceSearch.search(q, region: userRegion.map {
                         MKCoordinateRegion(center: $0.center, latitudinalMeters: 5000, longitudinalMeters: 5000)
                     })
-                    await MainActor.run { showResults(q, results) }
+                    await MainActor.run { showResults(q, q, results) }
+                }
+            }
+            if args.contains("-panAfter") {
+                // Sposta la mappa verso nord per mostrare "Cerca in questa zona".
+                DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+                    if let r = mapState.region {
+                        zoomRequest = MKCoordinateRegion(
+                            center: CLLocationCoordinate2D(latitude: r.center.latitude + r.span.latitudeDelta * 0.6,
+                                                           longitude: r.center.longitude),
+                            span: r.span)
+                    }
                 }
             }
         }

@@ -25,6 +25,9 @@ Così durante i viaggi puoi scegliere strade nuove.
   "benzina"…) e premi Cerca, oppure usa le scorciatoie (Supermercati, Benzina,
   Farmacie, Bar, Ristoranti, Parcheggi, Bancomat): tutti i risultati compaiono
   sulla mappa e in un elenco ordinato per distanza; toccane uno per il percorso.
+  Funziona con qualunque insegna o tipo di attività, in tutto il mondo (dati di
+  Apple Mappe, ~25 risultati per ricerca). Spostando la mappa compare
+  **"Cerca in questa zona"** per ripetere la ricerca nell'area visibile.
 - **Percorso con più strade nuove**: l'app confronta i percorsi di Apple più due
   varianti e propone (in viola) quello con più strade nuove senza allungare
   troppo; con ‹ › vedi le alternative.

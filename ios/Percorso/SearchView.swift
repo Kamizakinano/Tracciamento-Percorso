@@ -109,7 +109,7 @@ struct RouteSearchView: View {
     /// `from` nil = la mia posizione.
     let onPlan: (_ from: Place?, _ to: Place, _ mode: TravelMode) -> Void
     /// Mostra sulla mappa tutti i risultati di una ricerca (es. tutti i Lidl).
-    let onShowAll: (_ query: String, _ results: [Place]) -> Void
+    let onShowAll: (_ title: String, _ query: String, _ results: [Place]) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var completer: SearchCompleter
@@ -124,7 +124,7 @@ struct RouteSearchView: View {
     @FocusState private var focus: Field?
 
     init(region: MKCoordinateRegion?, initialDestination: String = "", mode: TravelMode,
-         onShowAll: @escaping (_ query: String, _ results: [Place]) -> Void,
+         onShowAll: @escaping (_ title: String, _ query: String, _ results: [Place]) -> Void,
          onPlan: @escaping (_ from: Place?, _ to: Place, _ mode: TravelMode) -> Void) {
         self.region = region
         self.onPlan = onPlan
@@ -305,7 +305,7 @@ struct RouteSearchView: View {
                 if results.isEmpty {
                     message = "Nessun risultato per «\(query)» in questa zona."
                 } else {
-                    onShowAll(title, results)
+                    onShowAll(title, query, results)
                     dismiss()
                 }
             }

@@ -339,4 +339,15 @@ final class PercorsoTests: XCTestCase {
         XCTAssertEqual(PlaceSearch.sorted([far, near], from: nil).map(\.name), ["Lidl lontano", "Lidl vicino"])
         XCTAssertFalse(PlaceSearch.categories.isEmpty)
     }
+
+    func testSearchHereAppearsWhenMapMoves() {
+        let base = MKCoordinateRegion(center: .init(latitude: 45.46, longitude: 9.19),
+                                      span: .init(latitudeDelta: 0.1, longitudeDelta: 0.1))
+        let nudged = MKCoordinateRegion(center: .init(latitude: 45.47, longitude: 9.19), span: base.span)
+        let moved = MKCoordinateRegion(center: .init(latitude: 45.52, longitude: 9.19), span: base.span)
+        let zoomedOut = MKCoordinateRegion(center: base.center, span: .init(latitudeDelta: 0.3, longitudeDelta: 0.3))
+        XCTAssertFalse(ContentView.movedEnough(from: base, to: nudged), "piccolo spostamento: niente pulsante")
+        XCTAssertTrue(ContentView.movedEnough(from: base, to: moved))
+        XCTAssertTrue(ContentView.movedEnough(from: base, to: zoomedOut))
+    }
 }

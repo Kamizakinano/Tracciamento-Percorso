@@ -16,6 +16,8 @@ struct MapView: UIViewRepresentable {
     /// Risultati di una ricerca (es. tutti i Lidl della zona).
     var results: [Place] = []
     var resultsVersion = 0
+    /// Inquadra i risultati (no quando si cerca nella zona già visibile).
+    var fitResults = true
     let mapType: MKMapType
     let place: Place?
     /// Navigazione in corso: mappa inclinata che segue la direzione di marcia.
@@ -125,7 +127,7 @@ struct MapView: UIViewRepresentable {
             c.resultAnnotations = results.map { ResultAnnotation(place: $0) }
             map.addAnnotations(c.resultAnnotations)
             c.resultsVersion = resultsVersion
-            if !results.isEmpty {
+            if !results.isEmpty && fitResults {
                 map.setUserTrackingMode(.none, animated: false)
                 var coords = results.map(\.coordinate)
                 if let user = map.userLocation.location?.coordinate { coords.append(user) }
