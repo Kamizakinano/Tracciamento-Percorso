@@ -86,7 +86,10 @@ struct ParkingView: View {
             }
             .onAppear {
                 loadNote()
-                if startWithHistory { showHistory = true }
+                if startWithHistory {
+                    // Il passaggio allo storico funziona solo a scheda già aperta.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { showHistory = true }
+                }
             }
             .onChange(of: parking.current?.id) { _ in loadNote() }
             .onChange(of: note) { text in

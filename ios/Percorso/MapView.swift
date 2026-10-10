@@ -338,7 +338,7 @@ struct MapView: UIViewRepresentable {
                     view.markerTintColor = .systemTeal
                     view.glyphText = "P"
                     view.glyphImage = nil
-                    view.displayPriority = .defaultHigh
+                    view.displayPriority = .required
                     view.canShowCallout = true
                 }
                 return view
