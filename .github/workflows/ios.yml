@@ -18,6 +18,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Versione
+        run: |
+          BASE=$(sed -n 's/^ *MARKETING_VERSION: *"\(.*\)"/\1/p' ios/project.yml | head -1)
+          echo "VERSION=${BASE}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
+          echo "Versione: ${BASE}.${GITHUB_RUN_NUMBER}"
+
+      - name: Controllo raggiungibilità OpenStreetMap (diagnostica)
+        continue-on-error: true
+        run: |
+          for host in overpass-api.de overpass.kumi.systems overpass.private.coffee; do
+            code=$(curl -s -o /tmp/op.json -w '%{http_code}' -m 40 -A 'Percorso iOS (uso personale)' \
+              --data-urlencode 'data=[out:json][timeout:25];way["highway"="residential"](45.46,9.18,45.47,9.19);out geom;' \
+              "https://$host/api/interpreter" || echo "errore")
+            echo "$host -> HTTP $code, $(wc -c < /tmp/op.json) byte"
+          done
+
       - name: Installa XcodeGen
         run: brew install xcodegen
 
@@ -60,6 +76,8 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -70,30 +88,30 @@ jobs:
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Percorso.app Payload/
-          zip -qry Percorso.ipa Payload
+          zip -qry "Percorso-v$VERSION.ipa" Payload
 
       - name: Carica l'IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Percorso-ipa
-          path: ios/Percorso.ipa
+          name: Percorso-v${{ env.VERSION }}
+          path: ios/Percorso-v${{ env.VERSION }}.ipa
 
       # Ultima IPA sul branch ipa-build (un solo commit, sovrascritto a ogni build):
-      # https://github.com/<owner>/<repo>/raw/ipa-build/Percorso.ipa
+      # il file si chiama Percorso-v<versione>.ipa (vedi BUILD.txt).
       - name: Pubblica l'IPA sul branch ipa-build
         env:
           TOKEN: ${{ github.token }}
         run: |
           OUT=$(mktemp -d)
-          cp ios/Percorso.ipa "$OUT/"
+          cp "ios/Percorso-v$VERSION.ipa" "$OUT/"
           if ls ios/screenshots/*.png >/dev/null 2>&1; then
             mkdir -p "$OUT/screenshots" && cp ios/screenshots/*.png "$OUT/screenshots/"
           fi
           cd "$OUT"
-          printf 'Commit: %s\nBranch: %s\nData: %s\n' "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%Y-%m-%dT%H:%MZ)" > BUILD.txt
+          printf 'Versione: %s\nFile: Percorso-v%s.ipa\nCommit: %s\nBranch: %s\nData: %s\n' "$VERSION" "$VERSION" "$GITHUB_SHA" "$GITHUB_REF_NAME" "$(date -u +%Y-%m-%dT%H:%MZ)" > BUILD.txt
           git init -q -b ipa-build
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .
-          git commit -qm "IPA da ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          git commit -qm "Percorso v$VERSION (${GITHUB_SHA::7})"
           git push -qf "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ipa-build

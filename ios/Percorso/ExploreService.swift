@@ -16,7 +16,12 @@ final class ExploreService: ObservableObject {
 
     /// Lato massimo dell'area scaricata (gradi, ~3 km) per non sovraccaricare il servizio.
     static let maxSpan = 0.03
-    static let endpoint = URL(string: "https://overpass-api.de/api/interpreter")!
+    /// Server Overpass: se il primo è sovraccarico si prova il successivo.
+    static let endpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+    ].compactMap(URL.init(string:))
 
     func toggle(region: MKCoordinateRegion, mode: TravelMode, index: SpatialIndex) {
         if isOn {
@@ -77,9 +82,12 @@ final class ExploreService: ObservableObject {
                 }
             } catch {
                 guard !Task.isCancelled else { return }
+                let text = (error as? URLError)?.code == .notConnectedToInternet
+                    ? "Strade nuove non disponibili: serve internet."
+                    : "Il servizio OpenStreetMap non risponde, riprova tra poco."
                 await MainActor.run {
                     self.isLoading = false
-                    self.message = "Strade nuove non disponibili (serve internet)."
+                    self.message = text
                 }
             }
         }
@@ -112,9 +120,24 @@ final class ExploreService: ObservableObject {
     }
 
     private static func download(region: MKCoordinateRegion, mode: TravelMode) async throws -> Data {
+        var lastError: Error = URLError(.badServerResponse)
+        for endpoint in endpoints {
+            if Task.isCancelled { throw CancellationError() }
+            do {
+                return try await download(region: region, mode: mode, from: endpoint)
+            } catch let error as URLError where error.code == .notConnectedToInternet {
+                throw error
+            } catch {
+                lastError = error
+            }
+        }
+        throw lastError
+    }
+
+    private static func download(region: MKCoordinateRegion, mode: TravelMode, from endpoint: URL) async throws -> Data {
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = 20
         request.setValue("Percorso iOS (uso personale)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         var allowed = CharacterSet.alphanumerics
@@ -123,6 +146,8 @@ final class ExploreService: ObservableObject {
         request.httpBody = Data(body.utf8)
         let (data, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+        // Overpass a volte risponde 200 con un errore testuale invece del JSON.
+        guard data.first == UInt8(ascii: "{") else { throw URLError(.cannotParseResponse) }
         return data
     }
 

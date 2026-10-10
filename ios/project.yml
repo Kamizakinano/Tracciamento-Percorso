@@ -7,8 +7,10 @@ options:
     iOS: "16.2"
 settings:
   base:
-    MARKETING_VERSION: "1.1"
-    CURRENT_PROJECT_VERSION: "2"
+    # Versione principale: la sale chi aggiunge funzioni. La build su GitHub
+    # aggiunge il numero di compilazione (es. 1.2 -> 1.2.7).
+    MARKETING_VERSION: "1.2"
+    CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
     TARGETED_DEVICE_FAMILY: "1"
 targets:

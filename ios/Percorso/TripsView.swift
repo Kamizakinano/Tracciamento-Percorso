@@ -24,6 +24,10 @@ struct TripsView: View {
     @State private var message: String?
     @State private var showStats = false
 
+    static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+    }
+
     private static let gpxTypes: [UTType] = [UTType(filenameExtension: "gpx") ?? .xml, .xml]
 
     var body: some View {
@@ -133,7 +137,12 @@ struct TripsView: View {
                 } header: {
                     Text("Backup")
                 } footer: {
-                    Text("Scegli una cartella in iCloud Drive: a ogni viaggio salvato viene aggiornato il file \(BackupManager.fileName).")
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Scegli una cartella in iCloud Drive: a ogni viaggio salvato viene aggiornato il file \(BackupManager.fileName).")
+                        Text("Percorso versione \(Self.appVersion)")
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 12)
+                    }
                 }
             }
             .navigationTitle("Viaggi")

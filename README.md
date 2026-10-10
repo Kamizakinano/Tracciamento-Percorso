@@ -48,11 +48,16 @@ L'`.ipa` viene compilato automaticamente da GitHub Actions (serve un Mac, che
 GitHub mette a disposizione) a ogni modifica della cartella `ios/`, dopo
 aver eseguito i test automatici (`ios/PercorsoTests`).
 
-1. Scarica l'ultima versione: **https://github.com/Kamizakinano/Tracciamento-Percorso/raw/ipa-build/Percorso.ipa**
-   (viene pubblicata solo se i test automatici passano). In alternativa:
-   scheda **Actions → Build iOS (IPA per Sideloadly)**, ultima esecuzione
-   riuscita, artifact **Percorso-ipa**.
-2. Apri **Sideloadly**, collega l'iPhone, trascina `Percorso.ipa`, inserisci il
+1. Scarica l'ultima versione dal branch
+   [`ipa-build`](https://github.com/Kamizakinano/Tracciamento-Percorso/tree/ipa-build):
+   il file si chiama **`Percorso-v<versione>.ipa`** (es. `Percorso-v1.2.7.ipa`).
+   Viene pubblicato solo se i test automatici passano. In alternativa: scheda
+   **Actions → Build iOS (IPA per Sideloadly)**, ultima esecuzione riuscita.
+
+   La versione è `principale.compilazione`: la parte principale (in
+   `ios/project.yml`) sale con le funzioni nuove, l'ultimo numero cresce a ogni
+   compilazione. La versione installata si legge in fondo alla schermata ☰.
+2. Apri **Sideloadly**, collega l'iPhone, trascina il file `.ipa`, inserisci il
    tuo Apple ID e premi **Start**.
 3. Sull'iPhone: *Impostazioni → Generali → VPN e gestione dispositivi* →
    autorizza il tuo Apple ID. Su iOS 16+ attiva anche la
