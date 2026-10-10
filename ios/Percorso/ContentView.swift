@@ -1,16 +1,20 @@
 import SwiftUI
+import MapKit
 
 struct ContentView: View {
     @EnvironmentObject private var store: TripStore
     @EnvironmentObject private var tracker: LocationTracker
     @AppStorage("showHistory") private var showHistory = true
     @AppStorage("alertEnabled") private var alertEnabled = true
+    @AppStorage("mapStyle") private var mapStyle = 0
 
     @State private var follow = true
     @State private var focus: Trip?
     @State private var showTrips = false
     @State private var askName = false
     @State private var tripName = ""
+    @State private var showSearch = false
+    @State private var place: Place?
 
     var body: some View {
         ZStack {
@@ -18,12 +22,23 @@ struct ContentView: View {
                     historyVersion: store.version,
                     showHistory: showHistory,
                     currentPoints: tracker.points,
+                    mapType: mapType,
+                    place: place,
                     follow: $follow,
                     focus: $focus)
                 .ignoresSafeArea()
 
             VStack(spacing: 10) {
                 stats
+                HStack(alignment: .top) {
+                    if let place { placeChip(place) }
+                    Spacer()
+                    VStack(spacing: 10) {
+                        roundButton("magnifyingglass") { showSearch = true }
+                        mapStyleMenu
+                    }
+                    .shadow(radius: 4)
+                }
                 if tracker.isRecording && tracker.onOldRoad && alertEnabled {
                     Text("⚠️ Strada già percorsa")
                         .font(.headline)
@@ -41,6 +56,9 @@ struct ContentView: View {
             .animation(.easeInOut(duration: 0.2), value: tracker.onOldRoad)
         }
         .onAppear { follow = store.trips.isEmpty || tracker.isRecording }
+        .sheet(isPresented: $showSearch) {
+            SearchView { place = $0 }
+        }
         .sheet(isPresented: $showTrips) {
             TripsView(focus: $focus)
                 .environmentObject(store)
@@ -110,12 +128,51 @@ struct ContentView: View {
         .shadow(radius: 4)
     }
 
-    private func roundButton(_ icon: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.title3)
-                .frame(width: 52, height: 52)
-                .background(.regularMaterial, in: Circle())
+    private var mapType: MKMapType {
+        switch mapStyle {
+        case 1: return .hybrid
+        case 2: return .satellite
+        default: return .standard
         }
+    }
+
+    private var mapStyleMenu: some View {
+        Menu {
+            Picker("Tipo di mappa", selection: $mapStyle) {
+                Label("Standard", systemImage: "map").tag(0)
+                Label("Satellite con strade", systemImage: "map.fill").tag(1)
+                Label("Satellite", systemImage: "globe.europe.africa.fill").tag(2)
+            }
+        } label: {
+            circleIcon("square.stack.3d.up")
+        }
+    }
+
+    private func placeChip(_ place: Place) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "mappin.circle.fill").foregroundStyle(.red)
+            Text(place.name).lineLimit(1)
+            Button {
+                self.place = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+            }
+        }
+        .font(.subheadline)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: Capsule())
+        .shadow(radius: 4)
+    }
+
+    private func roundButton(_ icon: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) { circleIcon(icon) }
+    }
+
+    private func circleIcon(_ icon: String) -> some View {
+        Image(systemName: icon)
+            .font(.title3)
+            .frame(width: 52, height: 52)
+            .background(.regularMaterial, in: Circle())
     }
 }

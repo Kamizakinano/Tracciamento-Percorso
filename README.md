@@ -14,6 +14,10 @@ Così durante i viaggi puoi scegliere strade nuove.
   "⚠️ Strada già percorsa" con vibrazione. Con l'app in background arriva una
   notifica (al massimo una al minuto). La distanza di avviso (15 / 25 / 40 m)
   è regolabile.
+- **Tipo di mappa** (pulsante a destra con i livelli): standard, satellite con
+  nomi delle strade, oppure solo satellite.
+- **Ricerca indirizzo** (lente): suggerimenti mentre scrivi; il luogo scelto
+  viene mostrato con un segnaposto rosso (tocca ✕ per toglierlo).
 - **Nuove %**: quanta parte del viaggio attuale è su strade mai fatte.
 - **Elenco viaggi**: zoom su un viaggio, eliminazione (scorri a sinistra),
   esportazione e importazione **GPX** (anche da Strava, Komoot, ecc.).
@@ -61,6 +65,7 @@ era rimasta.
 | `ios/Percorso/TripStore.swift` | Viaggi salvati e indice delle strade già fatte |
 | `ios/Percorso/MapView.swift` | Mappa (Apple Maps) con i percorsi evidenziati |
 | `ios/Percorso/ContentView.swift`, `TripsView.swift` | Interfaccia |
+| `ios/Percorso/SearchView.swift` | Ricerca di indirizzi e luoghi |
 | `ios/Percorso/GPX.swift` | Import/export GPX |
 | `.github/workflows/ios.yml` | Compilazione dell'`.ipa` |
 | `web/` | Prima versione come web app (senza background) |

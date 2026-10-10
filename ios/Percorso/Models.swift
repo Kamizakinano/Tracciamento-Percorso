@@ -104,3 +104,12 @@ struct SpatialIndex {
         return false
     }
 }
+
+/// Luogo trovato con la ricerca, mostrato sulla mappa con un segnaposto.
+struct Place: Identifiable, Equatable {
+    let id = UUID()
+    let name: String
+    let coordinate: CLLocationCoordinate2D
+
+    static func == (a: Place, b: Place) -> Bool { a.id == b.id }
+}

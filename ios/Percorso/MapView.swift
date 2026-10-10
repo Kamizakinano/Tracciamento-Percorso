@@ -7,6 +7,8 @@ struct MapView: UIViewRepresentable {
     let historyVersion: Int
     let showHistory: Bool
     let currentPoints: [TrackPoint]
+    let mapType: MKMapType
+    let place: Place?
     @Binding var follow: Bool
     @Binding var focus: Trip?
 
@@ -25,6 +27,8 @@ struct MapView: UIViewRepresentable {
         let c = context.coordinator
         c.parent = self
 
+        if map.mapType != mapType { map.mapType = mapType }
+
         let historyKey = "\(historyVersion)-\(showHistory)"
         if c.historyKey != historyKey {
             map.removeOverlays(c.historyOverlays)
@@ -39,6 +43,25 @@ struct MapView: UIViewRepresentable {
             c.currentOverlay = Self.polyline(currentPoints, kind: Coordinator.current)
             if let new = c.currentOverlay { map.addOverlay(new, level: .aboveRoads) }
             c.currentCount = currentPoints.count
+        }
+
+        if c.placeID != place?.id {
+            if let old = c.placeAnnotation { map.removeAnnotation(old) }
+            c.placeAnnotation = nil
+            c.placeID = place?.id
+            if let place {
+                let pin = MKPointAnnotation()
+                pin.coordinate = place.coordinate
+                pin.title = place.name
+                map.addAnnotation(pin)
+                map.selectAnnotation(pin, animated: true)
+                c.placeAnnotation = pin
+                map.setUserTrackingMode(.none, animated: false)
+                map.setRegion(MKCoordinateRegion(center: place.coordinate, latitudinalMeters: 1500, longitudinalMeters: 1500),
+                              animated: true)
+                DispatchQueue.main.async { follow = false }
+                return
+            }
         }
 
         if let trip = focus {
@@ -81,6 +104,8 @@ struct MapView: UIViewRepresentable {
         var historyOverlays: [MKOverlay] = []
         var currentOverlay: MKPolyline?
         var currentCount = -1
+        var placeID: UUID?
+        var placeAnnotation: MKPointAnnotation?
 
         init(_ parent: MapView) { self.parent = parent }
 
