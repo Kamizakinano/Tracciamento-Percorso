@@ -88,6 +88,8 @@ enum ParkingEvent {
     case parked(TrackPoint, left: Bool)
     /// Hai ripreso a guidare partendo da qui.
     case departed(TrackPoint)
+    /// Il parcheggio salvato qui era un falso allarme (es. GPS sospeso al semaforo).
+    case cancelled(TrackPoint)
 }
 
 /// Capisce dalla velocità quando lasci l'auto: dopo almeno 500 m in auto,
@@ -247,6 +249,15 @@ final class ParkingStore: ObservableObject {
     func departed(from point: CLLocationCoordinate2D, now: Date = Date()) {
         guard let cur = current, Geo.distance(cur.coordinate, point) < 250, now > cur.date else { return }
         retrieve(now: now)
+    }
+
+    /// Annulla un parcheggio automatico sbagliato (salvato a `date`) e rimette l'auto
+    /// dov'era prima, se quel parcheggio l'aveva spostata nello storico.
+    func cancelAutomatic(at date: Date) {
+        guard let i = spots.lastIndex(where: { $0.date == date && $0.source == .speed && $0.isActive }) else { return }
+        spots.remove(at: i)
+        if let j = spots.lastIndex(where: { $0.retrieved == date }) { spots[j].retrieved = nil }
+        changed()
     }
 
     func setNote(_ note: String, for id: UUID) {

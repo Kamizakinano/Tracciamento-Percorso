@@ -27,6 +27,8 @@ struct PercorsoApp: App {
                 parking.park(at: point.coordinate, date: point.time, source: .speed, alreadyLeft: left)
             case let .departed(point):
                 parking.departed(from: point.coordinate)
+            case let .cancelled(point):
+                parking.cancelAutomatic(at: point.time)
             }
         }
         // Scollegato dall'auto (Bluetooth o CarPlay): parcheggiato qui.

@@ -1,5 +1,6 @@
 import Foundation
 import CoreLocation
+import MapKit
 import UIKit
 import UserNotifications
 
@@ -28,6 +29,9 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     private var lastVoice = Date.distantPast
     private var parkingDetector = ParkingDetector()
     private var pendingFixes: [(CLLocation) -> Void] = []
+    /// Parcheggio salvato quando iOS ha sospeso il GPS: se riparti senza esserti fermato
+    /// davvero (era un semaforo) viene annullato.
+    private var pauseParking: TrackPoint?
 
     private let maxAccuracy = 50.0
     private let currentURL = TripStore.documents.appendingPathComponent("current.json")
@@ -38,6 +42,9 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     static let autoGap: TimeInterval = 300
     static let autoJump = 2000.0
     static let autoMinDistance = 150.0
+    /// Buco nel tracciato (GPS sospeso, galleria) da ricostruire lungo le strade.
+    static let bridgeMinGap = 300.0
+    static let bridgeMaxGap = 60_000.0
 
     private struct CurrentTrip: Codable {
         var start: Date
@@ -199,6 +206,43 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
         manager.distanceFilter = automatic ? 5 : currentMode.minStep
     }
 
+    /// Buco nel tracciato percorso senza fermarsi: velocità media tra 7 e 250 km/h.
+    /// In quel caso il tratto mancante si ricostruisce invece di spezzare il viaggio.
+    static func isBridgeableGap(last: TrackPoint, next: TrackPoint, calendar: Calendar = .current) -> Bool {
+        let d = Geo.distance(last, next)
+        let t = next.time.timeIntervalSince(last.time)
+        guard d >= bridgeMinGap, d <= bridgeMaxGap, t > 0, calendar.isDate(last.time, inSameDayAs: next.time) else { return false }
+        let speed = d / t
+        return speed >= 2 && speed <= 70
+    }
+
+    /// Punti del tratto ricostruito, con l'ora stimata in proporzione alla distanza.
+    static func bridgePoints(_ path: [CLLocationCoordinate2D], from a: TrackPoint, to b: TrackPoint) -> [TrackPoint] {
+        var coords = path
+        // Togli gli estremi che coincidono con i punti già registrati.
+        if let f = coords.first, Geo.distance(f, a.coordinate) < 15 { coords.removeFirst() }
+        if let l = coords.last, Geo.distance(l, b.coordinate) < 15 { coords.removeLast() }
+        guard !coords.isEmpty else { return [] }
+        let all = [a.coordinate] + coords + [b.coordinate]
+        let total = max(1, Geo.length(of: all))
+        let span = b.time.timeIntervalSince(a.time)
+        var done = 0.0
+        var out: [TrackPoint] = []
+        for i in 1..<(all.count - 1) {
+            done += Geo.distance(all[i - 1], all[i])
+            out.append(TrackPoint(lat: all[i].latitude, lon: all[i].longitude,
+                                  time: a.time.addingTimeInterval(span * done / total)))
+        }
+        return out
+    }
+
+    /// Il percorso stradale trovato è credibile (non molto più lungo della linea d'aria).
+    static func isPlausibleBridge(_ path: [CLLocationCoordinate2D], from a: TrackPoint, to b: TrackPoint) -> Bool {
+        guard path.count >= 2 else { return false }
+        let straight = Geo.distance(a, b)
+        return Geo.length(of: path) <= straight * 3 + 1000
+    }
+
     /// Decide se un nuovo punto appartiene a un nuovo viaggio automatico.
     static func shouldSplit(last: TrackPoint, next: TrackPoint, calendar: Calendar = .current) -> Bool {
         next.time.timeIntervalSince(last.time) > autoGap
@@ -265,8 +309,14 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     func locationManagerDidPauseLocationUpdates(_ manager: CLLocationManager) {
-        // iOS sospende il GPS quando resti fermo: se stavi guidando, hai parcheggiato.
-        endParkingDetection(next: nil)
+        // iOS sospende il GPS quando resti fermo: se stavi guidando, hai parcheggiato
+        // (salvo ripartire subito: vedi pauseParking).
+        if detectsParking, case let .parked(point, left)? = parkingDetector.tripEnded(next: nil) {
+            onParking?(.parked(point, left: left))
+            pauseParking = point
+        } else {
+            parkingDetector.reset()
+        }
         paused = true
         persistCurrent()
     }
@@ -293,13 +343,29 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             updateMode(speed: loc.speed)
             onLocation?(loc)
             let p = TrackPoint(loc)
-            if isAutomatic, let last = points.last, Self.shouldSplit(last: last, next: p) {
+            var gapFrom: TrackPoint?
+            if let last = points.last, Self.isBridgeableGap(last: last, next: p) {
+                // GPS sospeso o perso mentre ti muovevi: ricostruisci il tratto, non spezzare il viaggio.
+                gapFrom = last
+                if let pp = pauseParking {
+                    onParking?(.cancelled(pp))
+                    pauseParking = nil
+                }
+            } else if isAutomatic, let last = points.last, Self.shouldSplit(last: last, next: p) {
+                pauseParking = nil
                 endParkingDetection(next: p)
                 finishAutoSegment()
             }
             feedParking(p, speed: loc.speed)
             let near = store.index.isNear(p, within: Settings.threshold(for: currentMode))
-            if let last = points.last {
+            if let from = gapFrom {
+                // La distanza del tratto mancante si aggiunge quando è ricostruito.
+                points.append(p)
+                setOldRoad(near)
+                requestBridge(from: from, to: p)
+                continue
+            } else if let last = points.last {
+                pauseParking = nil // ripartito senza salti: il parcheggio era vero
                 let step = Geo.distance(last, p)
                 guard step >= (isAutomatic ? 5 : currentMode.minStep) else { continue }
                 distance += step
@@ -331,7 +397,12 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
         let mode = TravelMode.infer(speed: avg)
         if mode != currentMode {
             currentMode = mode
-            if !isAutomatic { manager.distanceFilter = mode.minStep }
+            if isAutomatic {
+                // In auto iOS sospende il GPS molto meno (es. fermo al semaforo o in coda).
+                manager.activityType = mode == .car ? .automotiveNavigation : .other
+            } else {
+                manager.distanceFilter = mode.minStep
+            }
         }
     }
 
@@ -363,6 +434,58 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
         }
         pendingFixes.append(completion)
         if !isRecording { manager.requestLocation() }
+    }
+
+    // MARK: - Tratti mancanti
+
+    private func requestBridge(from a: TrackPoint, to b: TrackPoint) {
+        let car = currentMode == .car || Geo.distance(a, b) / max(1, b.time.timeIntervalSince(a.time)) > 7
+        Task {
+            let path = await Self.roadPath(from: a.coordinate, to: b.coordinate, car: car)
+            await MainActor.run { self.applyBridge(from: a, to: b, path: path) }
+        }
+    }
+
+    private static func roadPath(from a: CLLocationCoordinate2D, to b: CLLocationCoordinate2D, car: Bool) async -> [CLLocationCoordinate2D]? {
+        let request = MKDirections.Request()
+        request.source = MKMapItem(placemark: MKPlacemark(coordinate: a))
+        request.destination = MKMapItem(placemark: MKPlacemark(coordinate: b))
+        request.transportType = car ? .automobile : .walking
+        guard let route = try? await MKDirections(request: request).calculate().routes.first else { return nil }
+        return RoutePlanner.coordinates(of: route.polyline)
+    }
+
+    /// Inserisce il tratto ricostruito; se non si trova un percorso, in automatico il
+    /// viaggio viene spezzato lì (come prima), in manuale resta una linea dritta.
+    private func applyBridge(from a: TrackPoint, to b: TrackPoint, path: [CLLocationCoordinate2D]?) {
+        guard let ia = points.lastIndex(where: { $0.time == a.time }), ia + 1 < points.count,
+              points[ia + 1].time == b.time else { return } // il viaggio è già stato chiuso
+        let straight = Geo.distance(a, b)
+        let threshold = Settings.threshold(for: currentMode)
+        if let path, Self.isPlausibleBridge(path, from: a, to: b) {
+            let added = Self.bridgePoints(path, from: a, to: b)
+            points.insert(contentsOf: added, at: ia + 1)
+            let segment = [a.coordinate] + added.map(\.coordinate) + [b.coordinate]
+            let length = Geo.length(of: segment)
+            distance += length
+            newRoadMeters += length * Geo.newFraction(of: segment, index: store.index, within: threshold)
+        } else if isAutomatic {
+            let head = Array(points[...ia])
+            let tail = Array(points[(ia + 1)...])
+            points = head
+            distance = Geo.length(of: head)
+            newRoadMeters = distance * Geo.newFraction(of: head.map(\.coordinate), index: store.index, within: threshold)
+            saveTrip(name: nil, automatic: true, minDistance: Self.autoMinDistance)
+            points = tail
+            tripStart = tail.first?.time ?? Date()
+            distance = Geo.length(of: tail)
+            newRoadMeters = distance * Geo.newFraction(of: tail.map(\.coordinate), index: store.index, within: threshold)
+        } else {
+            distance += straight
+            if !store.index.isNear(b, within: threshold) { newRoadMeters += straight }
+        }
+        persistCurrent()
+        LiveActivityManager.shared.update(activityState)
     }
 
     // MARK: - Avviso strada già percorsa

@@ -12,7 +12,9 @@ Così durante i viaggi puoi scegliere strade nuove.
   Avvia, anche con l'app chiusa. Ogni spostamento diventa un viaggio (si chiude
   dopo 5 minuti fermo, a un salto di 2 km o a mezzanotte). Serve il permesso di
   posizione **"Sempre"**; quando sei fermo iOS sospende il GPS per risparmiare
-  batteria.
+  batteria. Se il GPS si ferma mentre ti stai muovendo (semaforo, coda,
+  galleria), al risveglio il tratto mancante viene ricostruito lungo le strade
+  invece di spezzare il viaggio.
 - **Colori per frequenza**: giallo = strada fatta 1 volta, arancione = 2-3
   volte, rosso = 4 o più.
 - **Strade nuove vicino a te** (pulsante ✨): scarica le strade della zona da
