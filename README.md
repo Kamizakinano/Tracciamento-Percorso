@@ -77,8 +77,8 @@ Così durante i viaggi puoi scegliere strade nuove.
   conto alla rovescia nella Live Activity), una nota e una foto. Lo storico
   mostra tutti i parcheggi e, cercando una destinazione in auto, la scheda del
   percorso dice dove avevi già trovato posto in zona (segnaposto "P").
-- **Passaporto e medaglie** (menu ☰): comuni, province, regioni e stati in cui
-  sei passato (anche dai viaggi già registrati), con la data della prima
+- **Passaporto e medaglie** (menu ☰): comuni, province, regioni e stati che
+  hai visitato **a piedi** (almeno 200 m camminati; passarci in auto non conta) (anche dai viaggi già registrati), con la data della prima
   visita. Medaglie a livelli (bronzo, argento, oro, platino) per comuni,
   province, regioni, stati, comuni nuovi in un giorno, km su strade nuove e
   viaggio più lungo, con la barra verso il prossimo traguardo. Notifica "Nuovo

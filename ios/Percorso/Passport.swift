@@ -145,6 +145,57 @@ struct Passport: Codable {
     var earned: [String: Date] = [:]
     /// Risultati del geocoder per celle di ~500 m (per non ripetere le richieste).
     var cache: [String: PlaceSample] = [:]
+    /// Versione delle regole: con la 2 contano solo i luoghi visitati a piedi.
+    var version: Int?
+
+    static let currentVersion = 2
+    /// Un luogo conta se ci cammini per almeno questi metri.
+    static let minWalk = 200.0
+    /// Oltre questa velocità (m/s, ~9 km/h) non stai camminando.
+    static let walkMaxSpeed = 2.5
+
+    /// Regole cambiate: ricalcola luoghi e medaglie dai viaggi (la cache dei nomi resta).
+    mutating func migrateIfNeeded() -> Bool {
+        guard version != Self.currentVersion else { return false }
+        places = [:]
+        processedTrips = []
+        earned = [:]
+        version = Self.currentVersion
+        return true
+    }
+
+    /// Tratti del viaggio percorsi a piedi per almeno `minWalk` metri.
+    /// Nei viaggi in auto o in bici contano solo quelli all'inizio o alla fine
+    /// (prima di salire o dopo il parcheggio): le code in mezzo non sono visite.
+    static func walkingStretches(of points: [TrackPoint], mode: TravelMode) -> [[TrackPoint]] {
+        guard points.count > 1 else { return [] }
+        var out: [[TrackPoint]] = []
+        var start = 0, walked = 0.0
+        func close(at end: Int) {
+            if end > start, walked >= minWalk,
+               mode == .foot || start == 0 || end == points.count - 1 {
+                out.append(Array(points[start...end]))
+            }
+        }
+        for i in 1..<points.count {
+            let dt = points[i].time.timeIntervalSince(points[i - 1].time)
+            let d = Geo.distance(points[i - 1], points[i])
+            if dt > 0 && d / dt <= walkMaxSpeed {
+                walked += d
+            } else {
+                close(at: i - 1)
+                start = i
+                walked = 0
+            }
+        }
+        close(at: points.count - 1)
+        return out
+    }
+
+    /// Punti da analizzare: solo dove hai camminato (inizio, uno ogni km, fine di ogni tratto).
+    static func walkingSamples(of trip: Trip) -> [TrackPoint] {
+        walkingStretches(of: trip.points, mode: trip.effectiveMode).flatMap { samples(of: $0, every: 1000) }
+    }
 
     func list(_ kind: PlaceKind) -> [VisitedPlace] {
         places.values.filter { $0.kind == kind }.sorted { $0.firstVisit > $1.firstVisit }
@@ -258,6 +309,8 @@ final class PassportStore: ObservableObject {
     private var latestTrips: [Trip] = []
     private var lastLive: CLLocation?
     private var liveBusy = false
+    /// Dove hai iniziato a camminare (per il controllo dal vivo).
+    private var walkStart: CLLocation?
 
     init(directory: URL = TripStore.documents, notify: Bool = true) {
         fileURL = directory.appendingPathComponent("passport.json")
@@ -266,6 +319,7 @@ final class PassportStore: ObservableObject {
            let saved = try? JSONDecoder().decode(Passport.self, from: data) {
             passport = saved
         }
+        if passport.migrateIfNeeded() { save() }
     }
 
     var medals: [MedalProgress] { passport.medals(trips: latestTrips) }
@@ -286,7 +340,7 @@ final class PassportStore: ObservableObject {
             let todo = latestTrips.filter { !passport.processedTrips.contains($0.id) && $0.points.count > 1 }
                 .sorted { $0.start < $1.start }
             tripLoop: for trip in todo {
-                for p in Passport.samples(of: trip.points) {
+                for p in Passport.walkingSamples(of: trip) {
                     let cell = Passport.cell(p.coordinate)
                     var sample = passport.cache[cell]
                     if sample == nil {
@@ -317,10 +371,20 @@ final class PassportStore: ObservableObject {
         }
     }
 
-    /// Durante la registrazione: avvisa appena entri in un comune mai visitato.
-    func live(_ location: CLLocation) {
-        guard !liveBusy, location.horizontalAccuracy >= 0, location.horizontalAccuracy < 200 else { return }
-        if let last = lastLive, location.distance(from: last) < 1000 || location.timestamp.timeIntervalSince(last.timestamp) < 90 { return }
+    /// Durante la registrazione: avvisa appena visiti a piedi un comune nuovo
+    /// (dopo almeno 200 m camminati).
+    func live(_ location: CLLocation, onFoot: Bool) {
+        guard onFoot, location.speed <= Passport.walkMaxSpeed else {
+            walkStart = nil
+            return
+        }
+        guard let start = walkStart else {
+            walkStart = location
+            return
+        }
+        guard !liveBusy, location.horizontalAccuracy >= 0, location.horizontalAccuracy < 100,
+              location.distance(from: start) >= Passport.minWalk else { return }
+        if let last = lastLive, location.distance(from: last) < 500 || location.timestamp.timeIntervalSince(last.timestamp) < 90 { return }
         lastLive = location
         let cell = Passport.cell(location.coordinate)
         if let cached = passport.cache[cell] {
@@ -396,6 +460,7 @@ final class PassportStore: ObservableObject {
     /// Dati di prova per gli screenshot.
     func loadDemo() {
         var p = Passport()
+        p.version = Passport.currentVersion
         let now = Date()
         func day(_ n: Double) -> Date { now.addingTimeInterval(-n * 86400) }
         let lombardia: [(String, String, Double)] = [

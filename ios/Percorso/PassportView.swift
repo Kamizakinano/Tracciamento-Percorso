@@ -116,7 +116,7 @@ struct PassportView: View {
                 }
             }
             .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
-            Text("La data è quella della prima visita. I nomi dei luoghi sono forniti da Apple.")
+            Text("Contano solo i luoghi in cui hai camminato a piedi per almeno 200 m (passarci in auto non basta). La data è quella della prima visita. I nomi dei luoghi sono forniti da Apple.")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }

@@ -104,4 +104,63 @@ final class PassportTests: XCTestCase {
         XCTAssertEqual(decoded.cache[Passport.cell(a)], sample("Brescia"))
         XCTAssertEqual(decoded.processedTrips.count, 1)
     }
+
+    // MARK: - Solo a piedi
+
+    /// Tratti a velocità costante: (metri al secondo, secondi), un punto ogni 5 s.
+    private func track(_ parts: [(Double, Double)]) -> [TrackPoint] {
+        var pts = [TrackPoint(lat: 45, lon: 9, time: t0)]
+        var x = 0.0, t = 0.0
+        for (speed, seconds) in parts {
+            for _ in 0..<Int(seconds / 5) {
+                x += speed * 5; t += 5
+                pts.append(TrackPoint(lat: 45 + x / 111_195, lon: 9, time: t0.addingTimeInterval(t)))
+            }
+        }
+        return pts
+    }
+
+    func testCarTripCountsOnlyTheWalkAfterParking() {
+        // Auto, coda lenta di 300 m in mezzo, ancora auto, poi 400 m a piedi dal parcheggio.
+        let pts = track([(14, 300), (1.5, 200), (14, 300), (1.3, 310)])
+        let stretches = Passport.walkingStretches(of: pts, mode: .car)
+        XCTAssertEqual(stretches.count, 1, "la coda in mezzo non conta")
+        XCTAssertEqual(stretches.first?.last, pts.last)
+        XCTAssertGreaterThanOrEqual(Geo.length(of: stretches[0]), 390)
+    }
+
+    func testDrivingThroughIsNotAVisit() {
+        let pts = track([(14, 600)])
+        XCTAssertTrue(Passport.walkingStretches(of: pts, mode: .car).isEmpty)
+        XCTAssertTrue(Passport.walkingSamples(of: Trip(start: t0, points: pts, mode: .car)).isEmpty)
+    }
+
+    func testShortWalkIsNotEnough() {
+        // 150 m a piedi dopo il parcheggio: meno di 200 m.
+        let pts = track([(14, 300), (1.3, 115)])
+        XCTAssertTrue(Passport.walkingStretches(of: pts, mode: .car).isEmpty)
+    }
+
+    func testWalkingTripCountsEverywhere() {
+        // Passeggiata di 2,3 km con una pausa: campioni a ogni km.
+        let pts = track([(1.4, 900), (0, 120), (1.4, 750)])
+        let stretches = Passport.walkingStretches(of: pts, mode: .foot)
+        XCTAssertEqual(stretches.count, 1)
+        let samples = Passport.walkingSamples(of: Trip(start: t0, points: pts, mode: .foot))
+        XCTAssertEqual(samples.first, pts.first)
+        XCTAssertEqual(samples.last, pts.last)
+        XCTAssertEqual(samples.count, 4, "inizio, 1 km, 2 km, fine")
+    }
+
+    func testOldPassportIsRecalculated() {
+        var p = Passport()
+        p.record(sample("Passato in auto"), at: t0)
+        p.processedTrips.insert(UUID())
+        p.cache["1:1"] = sample("Brescia")
+        XCTAssertTrue(p.migrateIfNeeded())
+        XCTAssertEqual(p.count(.comune), 0)
+        XCTAssertTrue(p.processedTrips.isEmpty, "i viaggi vengono rianalizzati")
+        XCTAssertNotNil(p.cache["1:1"], "i nomi già scaricati restano")
+        XCTAssertFalse(p.migrateIfNeeded())
+    }
 }

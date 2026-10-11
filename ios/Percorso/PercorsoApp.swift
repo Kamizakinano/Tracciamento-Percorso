@@ -21,7 +21,8 @@ struct PercorsoApp: App {
         // La navigazione segue le posizioni della registrazione (anche in background).
         tracker.onLocation = { [weak tracker] location in
             navigation.update(location)
-            passport.live(location) // "Nuovo comune!" durante la registrazione
+            // "Nuovo comune!" quando ci cammini a piedi.
+            passport.live(location, onFoot: tracker?.currentMode == .foot)
             tracker?.navigationInfo = navigation.isActive
                 ? (navigation.instruction, navigation.distanceToManeuver, navigation.maneuverIcon)
                 : nil
