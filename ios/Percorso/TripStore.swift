@@ -20,6 +20,8 @@ final class TripStore: ObservableObject {
     private let queue = DispatchQueue(label: "percorso.index", qos: .userInitiated)
     private var rebuildToken = 0
     private var geocoding = false
+    /// Chiamato a ogni modifica dei viaggi (il Passaporto analizza quelli nuovi).
+    var onTripsChanged: (([Trip]) -> Void)?
 
     init() {
         if let data = try? Data(contentsOf: fileURL),
@@ -81,6 +83,7 @@ final class TripStore: ObservableObject {
     }
 
     private func changed() {
+        onTripsChanged?(trips)
         save()
         rebuild()
         BackupManager.shared.scheduleBackup(trips)

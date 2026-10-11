@@ -67,6 +67,11 @@ sleep 10 && xcrun simctl io "$UDID" screenshot "$OUT/16-parcheggio-zona.png"  # 
 stop_app
 rm -rf "$DOCS/parking.json" "$DOCS/Parcheggi"  # gli altri screenshot senza auto parcheggiata
 
+# Passaporto e medaglie (dati di prova).
+shot 19-passaporto -passportDemo -showTrips -showPassport
+shot 20-passaporto-luoghi -passportDemo -showTrips -showPassport -passportPlaces
+rm -f "$DOCS/passport.json"
+
 # Registrazione programmata (in fondo: poi viene spenta).
 shot 17-periodo -periodDemo -showTrips
 shot 18-periodo-mappa -periodDemo

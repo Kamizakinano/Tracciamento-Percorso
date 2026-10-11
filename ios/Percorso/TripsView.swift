@@ -5,6 +5,7 @@ struct TripsView: View {
     @EnvironmentObject private var store: TripStore
     @EnvironmentObject private var tracker: LocationTracker
     @EnvironmentObject private var parking: ParkingStore
+    @EnvironmentObject private var passport: PassportStore
     @ObservedObject private var backup = BackupManager.shared
     @Binding var focus: Trip?
     /// "Ho parcheggiato qui" e apertura della scheda del parcheggio (gestiti dalla mappa).
@@ -31,6 +32,7 @@ struct TripsView: View {
     @State private var share: ShareItem?
     @State private var message: String?
     @State private var showStats = false
+    @State private var showPassport = false
 
     static var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
@@ -46,6 +48,17 @@ struct TripsView: View {
                         showStats = true
                     } label: {
                         Label("Statistiche", systemImage: "chart.bar.xaxis")
+                    }
+                    Button {
+                        showPassport = true
+                    } label: {
+                        HStack {
+                            Label("Passaporto e medaglie", systemImage: "medal.fill")
+                            Spacer()
+                            Text("\(passport.passport.count(.comune)) comuni")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
@@ -221,6 +234,10 @@ struct TripsView: View {
             .sheet(isPresented: $showStats) {
                 StatsView().environmentObject(store)
             }
+            .sheet(isPresented: $showPassport) {
+                PassportView(scrollToPlaces: ProcessInfo.processInfo.arguments.contains("-passportPlaces"))
+                    .environmentObject(passport)
+            }
             .alert(message ?? "", isPresented: Binding(get: { message != nil },
                                                        set: { if !$0 { message = nil } })) {
                 Button("OK", role: .cancel) {}
@@ -230,6 +247,7 @@ struct TripsView: View {
             .onAppear {
                 #if DEBUG
                 if ProcessInfo.processInfo.arguments.contains("-stats") { showStats = true }
+                if ProcessInfo.processInfo.arguments.contains("-showPassport") { showPassport = true }
                 #endif
             }
         }

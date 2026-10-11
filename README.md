@@ -77,6 +77,14 @@ Così durante i viaggi puoi scegliere strade nuove.
   conto alla rovescia nella Live Activity), una nota e una foto. Lo storico
   mostra tutti i parcheggi e, cercando una destinazione in auto, la scheda del
   percorso dice dove avevi già trovato posto in zona (segnaposto "P").
+- **Passaporto e medaglie** (menu ☰): comuni, province, regioni e stati in cui
+  sei passato (anche dai viaggi già registrati), con la data della prima
+  visita. Medaglie a livelli (bronzo, argento, oro, platino) per comuni,
+  province, regioni, stati, comuni nuovi in un giorno, km su strade nuove e
+  viaggio più lungo, con la barra verso il prossimo traguardo. Notifica "Nuovo
+  comune!" durante la registrazione e quando sblocchi una medaglia. I nomi dei
+  luoghi vengono da Apple (serve internet; i viaggi lunghi richiedono qualche
+  minuto).
 - **Statistiche**: km, tempo, km su strade nuove, divisione per mezzo, zone più
   esplorate, per settimana / mese / anno / sempre.
 - **Backup automatico**: scegli una cartella (per esempio in iCloud Drive) e a
@@ -136,6 +144,7 @@ era rimasta.
 | `ios/Percorso/ExploreService.swift` | Strade nuove da OpenStreetMap |
 | `ios/Percorso/RoutePlanner.swift` | Percorso con più strade nuove |
 | `ios/Percorso/StatsView.swift` | Statistiche |
+| `ios/Percorso/Passport.swift`, `PassportView.swift` | Passaporto dei luoghi e medaglie |
 | `ios/Percorso/Parking.swift`, `ParkingView.swift` | Parcheggio: rilevamento, storico, ticket, Bluetooth |
 | `ios/Percorso/BackupManager.swift` | Backup automatico |
 | `ios/Percorso/VoiceAlert.swift`, `LiveActivityManager.swift` | Avviso vocale e Live Activity |

@@ -18,6 +18,7 @@ struct ContentView: View {
     @EnvironmentObject private var tracker: LocationTracker
     @EnvironmentObject private var navigation: NavigationSession
     @EnvironmentObject private var parking: ParkingStore
+    @EnvironmentObject private var passport: PassportStore
     @ObservedObject private var carAudio = CarAudioMonitor.shared
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var explore = ExploreService()
@@ -162,6 +163,7 @@ struct ContentView: View {
                 .environmentObject(store)
                 .environmentObject(tracker)
                 .environmentObject(parking)
+                .environmentObject(passport)
         }
         .sheet(isPresented: $showStats) {
             StatsView().environmentObject(store)
@@ -1022,6 +1024,7 @@ struct ContentView: View {
             d.set(today.addingTimeInterval(5 * 86400).timeIntervalSinceReferenceDate, forKey: Settings.periodEnd)
             tracker.refreshSchedule()
         }
+        if args.contains("-passportDemo") { passport.loadDemo() }
         if args.contains("-showParking") { openParking() }
         if args.contains("-parkingHistory") { openParking(history: true) }
         if args.contains("-showTrips") { showTrips = true }
