@@ -66,6 +66,12 @@ shot 16-parcheggio-zona -parkDemo -routeTo "45.4859,9.2048,Stazione Centrale"
 sleep 10 && xcrun simctl io "$UDID" screenshot "$OUT/16-parcheggio-zona.png"  # attende i percorsi di Apple
 stop_app
 rm -rf "$DOCS/parking.json" "$DOCS/Parcheggi"  # gli altri screenshot senza auto parcheggiata
+
+# Registrazione programmata (in fondo: poi viene spenta).
+shot 17-periodo -periodDemo -showTrips
+shot 18-periodo-mappa -periodDemo
+stop_app
+xcrun simctl spawn "$UDID" defaults write "$BUNDLE" periodOn -bool false
 shot 10-mezzi -routeTo "45.4859,9.2048,Stazione Centrale" -transit
 sleep 12 && xcrun simctl io "$UDID" screenshot "$OUT/10-mezzi.png"  # attende Transitous
 shot 9-navigazione -routeTo "45.4859,9.2048,Stazione Centrale" -navigate

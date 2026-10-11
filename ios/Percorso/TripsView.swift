@@ -20,6 +20,9 @@ struct TripsView: View {
     @AppStorage(Settings.modeFilter) private var modeFilter = ""
     @AppStorage(Settings.voiceAlert) private var voiceAlert = 1
     @AppStorage(Settings.autoRecord) private var autoRecord = false
+    @AppStorage(Settings.periodOn) private var periodOn = false
+    @AppStorage(Settings.periodStart) private var periodStart = 0.0
+    @AppStorage(Settings.periodEnd) private var periodEnd = 0.0
     @AppStorage(Settings.navigationVoice) private var navigationVoice = true
 
     private enum FileAction { case importGPX, restore, chooseFolder }
@@ -70,6 +73,22 @@ struct TripsView: View {
                     Toggle(isOn: Binding(get: { autoRecord }, set: { tracker.setAutoRecord($0) })) {
                         Label("Registra sempre", systemImage: "infinity")
                     }
+                    Toggle(isOn: Binding(get: { periodOn }, set: setPeriodOn)) {
+                        Label("Registra in un periodo", systemImage: "calendar")
+                    }
+                    .disabled(autoRecord)
+                    if periodOn && !autoRecord {
+                        DatePicker("Dal", selection: periodDate($periodStart, other: $periodEnd, isStart: true),
+                                   displayedComponents: .date)
+                        DatePicker("Al (compreso)", selection: periodDate($periodEnd, other: $periodStart, isStart: false),
+                                   in: Date(timeIntervalSinceReferenceDate: periodStart)...,
+                                   displayedComponents: .date)
+                        if let period = Settings.period {
+                            Text(periodStatus(period))
+                                .font(.footnote)
+                                .foregroundStyle(period.contains(Date()) ? .green : .secondary)
+                        }
+                    }
                     Picker(selection: $travelMode) {
                         Text("Rilevamento automatico").tag("")
                         ForEach(TravelMode.allCases) { Label($0.label, systemImage: $0.icon).tag($0.rawValue) }
@@ -81,7 +100,9 @@ struct TripsView: View {
                 } footer: {
                     Text(autoRecord
                          ? "Ogni spostamento viene registrato da solo, anche senza aprire l'app. Consenti la posizione \"Sempre\". Consuma più batteria."
-                         : "Registra solo tra Avvia e Ferma.")
+                         : periodOn
+                         ? "Nei giorni scelti ogni spostamento viene registrato da solo, come con \"Registra sempre\"; poi la registrazione si ferma. Serve la posizione \"Sempre\". Se l'app è chiusa del tutto, parte al primo spostamento del primo giorno (riceverai una notifica): aprila una volta per sicurezza."
+                         : "Registra solo tra Avvia e Ferma, oppure in un periodo scelto da te.")
                 }
 
                 Section("Avvisi") {
@@ -212,6 +233,36 @@ struct TripsView: View {
                 #endif
             }
         }
+    }
+
+    // MARK: - Registrazione programmata
+
+    private func setPeriodOn(_ on: Bool) {
+        if on && (periodStart == 0 || Settings.period.map { $0.isOver(Date()) } == true) {
+            // Prima volta (o periodo già passato): da oggi per una settimana.
+            let today = Calendar.current.startOfDay(for: Date())
+            periodStart = today.timeIntervalSinceReferenceDate
+            periodEnd = today.addingTimeInterval(6 * 86400).timeIntervalSinceReferenceDate
+        }
+        periodOn = on
+        tracker.refreshSchedule()
+    }
+
+    /// Data del periodo; se la fine finisce prima dell'inizio, si sposta anche l'altra.
+    private func periodDate(_ value: Binding<Double>, other: Binding<Double>, isStart: Bool) -> Binding<Date> {
+        Binding(get: { Date(timeIntervalSinceReferenceDate: value.wrappedValue) }, set: { date in
+            let day = Calendar.current.startOfDay(for: date).timeIntervalSinceReferenceDate
+            value.wrappedValue = day
+            if (isStart ? other.wrappedValue < day : other.wrappedValue > day) { other.wrappedValue = day }
+            tracker.refreshSchedule()
+        })
+    }
+
+    private func periodStatus(_ period: RecordingPeriod) -> String {
+        let now = Date()
+        if period.contains(now) { return "● Registrazione in corso \(period.text)" }
+        if period.isUpcoming(now) { return "Partirà da sola \(period.text)" }
+        return "Periodo finito (\(period.text))"
     }
 
     private func pick(_ action: FileAction) {

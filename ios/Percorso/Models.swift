@@ -142,6 +142,9 @@ enum Settings {
     static let voiceAlert = "voiceAlert"       // 0 mai, 1 cuffie/CarPlay, 2 sempre
     static let mapStyle = "mapStyle"
     static let showTraffic = "showTraffic"
+    static let periodOn = "periodOn"
+    static let periodStart = "periodStart"     // giorno di inizio (secondi dal 2001)
+    static let periodEnd = "periodEnd"         // giorno di fine (compreso)
     static let navigationVoice = "navigationVoice"
     static let parkingDetectKey = "parkingDetect"     // 0 no, 1 velocità e Bluetooth, 2 solo Bluetooth
     static let carBluetoothKey = "carBluetooth"       // nome del Bluetooth dell'auto
@@ -152,6 +155,14 @@ enum Settings {
 
     static var alertsOn: Bool { d.object(forKey: alertEnabled) as? Bool ?? true }
     static var autoRecordOn: Bool { d.bool(forKey: autoRecord) }
+    /// Registrazione programmata "dal giorno A al giorno B", se attiva.
+    static var period: RecordingPeriod? {
+        guard d.bool(forKey: periodOn), d.double(forKey: periodStart) != 0 else { return nil }
+        return RecordingPeriod(start: Date(timeIntervalSinceReferenceDate: d.double(forKey: periodStart)),
+                               end: Date(timeIntervalSinceReferenceDate: d.double(forKey: periodEnd)))
+    }
+    /// La registrazione automatica deve essere accesa adesso ("Registra sempre" o periodo in corso).
+    static var shouldAutoRecord: Bool { autoRecordOn || (period?.contains(Date()) ?? false) }
     static var fixedMode: TravelMode? { TravelMode(rawValue: d.string(forKey: travelMode) ?? "") }
     static var voiceMode: Int { d.object(forKey: voiceAlert) as? Int ?? 1 }
     static var navigationVoiceOn: Bool { d.object(forKey: navigationVoice) as? Bool ?? true }
@@ -171,6 +182,34 @@ enum Settings {
 
     static var filter: TripFilter {
         TripFilter(days: d.integer(forKey: historyDays), mode: TravelMode(rawValue: d.string(forKey: modeFilter) ?? ""))
+    }
+}
+
+/// Periodo di registrazione programmata: dall'inizio del giorno `start`
+/// alla fine del giorno `end` (compreso).
+struct RecordingPeriod: Equatable {
+    var start: Date
+    var end: Date
+
+    func bounds(calendar: Calendar = .current) -> (from: Date, to: Date) {
+        let from = calendar.startOfDay(for: start)
+        let lastDay = max(from, calendar.startOfDay(for: end))
+        let to = calendar.date(byAdding: .day, value: 1, to: lastDay) ?? lastDay.addingTimeInterval(86400)
+        return (from, to)
+    }
+
+    func contains(_ date: Date, calendar: Calendar = .current) -> Bool {
+        let b = bounds(calendar: calendar)
+        return date >= b.from && date < b.to
+    }
+
+    func isUpcoming(_ now: Date, calendar: Calendar = .current) -> Bool { now < bounds(calendar: calendar).from }
+    func isOver(_ now: Date, calendar: Calendar = .current) -> Bool { now >= bounds(calendar: calendar).to }
+
+    /// "dal 12 ott al 18 ott"
+    var text: String {
+        let f = Date.FormatStyle().day().month(.abbreviated)
+        return "dal \(start.formatted(f)) al \(max(start, end).formatted(f))"
     }
 }
 

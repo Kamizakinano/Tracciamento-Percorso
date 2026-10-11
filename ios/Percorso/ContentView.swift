@@ -360,7 +360,13 @@ struct ContentView: View {
     private var statusBar: some View {
         HStack(spacing: 12) {
             if tracker.isAutomatic {
-                Label("Auto", systemImage: "infinity").foregroundStyle(.green)
+                if !Settings.autoRecordOn, let period = Settings.period {
+                    // Registrazione programmata: fino a quando.
+                    Label("Fino al \(period.end.formatted(.dateTime.day().month(.abbreviated)))", systemImage: "calendar")
+                        .foregroundStyle(.green)
+                } else {
+                    Label("Auto", systemImage: "infinity").foregroundStyle(.green)
+                }
             } else {
                 Label(tracker.isRecording ? "Registrazione" : "Fermo",
                       systemImage: tracker.isRecording ? "record.circle" : "pause.circle")
@@ -970,6 +976,15 @@ struct ContentView: View {
                         latitudinalMeters: 900, longitudinalMeters: 900)
                 }
             }
+        }
+        if args.contains("-periodDemo") {
+            // Registrazione programmata da ieri a fra 5 giorni.
+            let today = Calendar.current.startOfDay(for: Date())
+            let d = UserDefaults.standard
+            d.set(true, forKey: Settings.periodOn)
+            d.set(today.addingTimeInterval(-86400).timeIntervalSinceReferenceDate, forKey: Settings.periodStart)
+            d.set(today.addingTimeInterval(5 * 86400).timeIntervalSinceReferenceDate, forKey: Settings.periodEnd)
+            tracker.refreshSchedule()
         }
         if args.contains("-showParking") { openParking() }
         if args.contains("-parkingHistory") { openParking(history: true) }

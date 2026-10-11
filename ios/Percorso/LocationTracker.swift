@@ -88,11 +88,12 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
         }
         // Dopo l'avvio dell'app (qui UIApplication potrebbe non essere ancora pronta).
         DispatchQueue.main.async { [self] in
-            if Settings.autoRecordOn {
+            if Settings.shouldAutoRecord {
                 startAuto()
             } else if !points.isEmpty {
                 start()
             }
+            refreshSchedule()
         }
     }
 
@@ -144,22 +145,45 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
         }
         resetTrip()
         LiveActivityManager.shared.end()
+        refreshSchedule() // nel frattempo può essere iniziato un periodo programmato
     }
 
     // MARK: - Registrazione automatica
 
     func setAutoRecord(_ on: Bool) {
         UserDefaults.standard.set(on, forKey: Settings.autoRecord)
-        if on {
-            if isRecording && !isAutomatic {
+        refreshSchedule(convertManual: true)
+    }
+
+    /// Accende o spegne la registrazione automatica secondo "Registra sempre" e il periodo
+    /// programmato. `convertManual`: un viaggio manuale in corso diventa automatico.
+    func refreshSchedule(now: Date = Date(), convertManual: Bool = false) {
+        let want = Settings.autoRecordOn || (Settings.period?.contains(now) ?? false)
+        if want && !isAutomatic {
+            if isRecording {
+                guard convertManual else { return } // finisci prima il viaggio manuale (es. navigazione)
                 // Salva il viaggio manuale in corso e passa alla modalità automatica.
                 saveTrip(name: nil, automatic: false, minDistance: 0)
                 resetTrip()
             }
             startAuto()
-        } else {
+        } else if !want && isAutomatic {
             stopAuto()
         }
+        // Periodo in arrivo: i cambi di posizione significativi risvegliano l'app
+        // anche se è chiusa, così la registrazione parte da sola il giorno giusto.
+        if !isAutomatic {
+            if let period = Settings.period, period.isUpcoming(now) {
+                if manager.authorizationStatus == .authorizedAlways {
+                    manager.startMonitoringSignificantLocationChanges()
+                } else if UIApplication.shared.applicationState == .active {
+                    manager.requestAlwaysAuthorization()
+                }
+            } else {
+                manager.stopMonitoringSignificantLocationChanges()
+            }
+        }
+        if !screenshots { PeriodReminders.schedule(Settings.period, now: now) }
     }
 
     private func startAuto() {
@@ -260,6 +284,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             endParkingDetection(next: manager.location.map(TrackPoint.init))
             finishAutoSegment()
         }
+        refreshSchedule()
         if isRecording { startLiveActivity() }
     }
 
@@ -297,6 +322,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
         case .authorizedWhenInUse, .authorizedAlways:
             if pendingStart { pendingStart = false; start() }
             if pendingAuto { pendingAuto = false; startAuto() }
+            if manager.authorizationStatus == .authorizedAlways { refreshSchedule() }
         case .denied, .restricted:
             if pendingStart || pendingAuto || isRecording {
                 pendingStart = false
@@ -330,6 +356,10 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             let fixes = pendingFixes
             pendingFixes = []
             fixes.forEach { $0(last) }
+        }
+        // Inizio o fine del periodo programmato (anche quando iOS risveglia l'app).
+        if (!isRecording || isAutomatic) && isAutomatic != Settings.shouldAutoRecord {
+            refreshSchedule()
         }
         guard isRecording else { return }
         if isAutomatic && paused {
@@ -533,5 +563,34 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
         guard UIApplication.shared.applicationState == .active, !screenshots else { return }
         LiveActivityManager.shared.start(startDate: isAutomatic ? Date() : tripStart,
                                          automatic: isAutomatic, state: activityState)
+    }
+}
+
+/// Notifiche di inizio e fine della registrazione programmata.
+enum PeriodReminders {
+    static let startID = "period-start"
+    static let endID = "period-end"
+
+    static func schedule(_ period: RecordingPeriod?, now: Date = Date()) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: [startID, endID])
+        guard let period else { return }
+        let b = period.bounds()
+        if b.from > now {
+            let content = UNMutableNotificationContent()
+            content.title = "Inizia la registrazione programmata"
+            content.body = "Percorso registra tutti i tuoi spostamenti \(period.text). Apri l'app una volta per essere sicuro che sia attiva."
+            content.sound = .default
+            center.add(UNNotificationRequest(identifier: startID, content: content,
+                                             trigger: UNTimeIntervalNotificationTrigger(timeInterval: b.from.timeIntervalSince(now), repeats: false)))
+        }
+        if b.to > now {
+            let content = UNMutableNotificationContent()
+            content.title = "Registrazione programmata finita"
+            content.body = "Il periodo \(period.text) è terminato: Percorso non registra più da solo."
+            content.sound = .default
+            center.add(UNNotificationRequest(identifier: endID, content: content,
+                                             trigger: UNTimeIntervalNotificationTrigger(timeInterval: b.to.timeIntervalSince(now), repeats: false)))
+        }
     }
 }

@@ -15,6 +15,10 @@ Così durante i viaggi puoi scegliere strade nuove.
   batteria. Se il GPS si ferma mentre ti stai muovendo (semaforo, coda,
   galleria), al risveglio il tratto mancante viene ricostruito lungo le strade
   invece di spezzare il viaggio.
+- **Registra in un periodo** (impostazioni): scegli il giorno di inizio e di
+  fine; in quei giorni ogni spostamento viene registrato da solo come con
+  "Registra sempre", poi la registrazione si ferma. Notifica all'inizio e alla
+  fine. Se l'app è chiusa del tutto parte al primo spostamento del primo giorno.
 - **Colori per frequenza**: giallo = strada fatta 1 volta, arancione = 2-3
   volte, rosso = 4 o più. Il traffico di Apple (linee con le freccette) è spento di
   serie per non confondersi: si accende con "Mostra traffico" nel menu dei livelli.
