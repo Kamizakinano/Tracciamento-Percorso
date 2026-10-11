@@ -124,7 +124,7 @@ struct TripsView: View {
                     Text("I viaggi esclusi non vengono mostrati e non fanno scattare gli avvisi.")
                 }
 
-                Section("Viaggi (\(store.trips.count))") {
+                Section {
                     let list = Array(store.trips.reversed())
                     if list.isEmpty {
                         Text("Nessun viaggio salvato.").foregroundStyle(.secondary)
@@ -136,10 +136,23 @@ struct TripsView: View {
                         } label: {
                             tripRow(trip)
                         }
+                        .contextMenu {
+                            Section("Mezzo") {
+                                ForEach(TravelMode.allCases) { m in
+                                    Button { store.setMode(m, for: trip.id) } label: {
+                                        Label(m.label, systemImage: m.icon)
+                                    }
+                                }
+                            }
+                        }
                     }
                     .onDelete { offsets in
                         store.delete(ids: Set(offsets.map { list[$0].id }))
                     }
+                } header: {
+                    Text("Viaggi (\(store.trips.count))")
+                } footer: {
+                    Text("Tieni premuto un viaggio per correggere il mezzo (auto, bici, a piedi).")
                 }
 
                 Section {

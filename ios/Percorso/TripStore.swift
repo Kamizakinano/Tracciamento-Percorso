@@ -26,6 +26,9 @@ final class TripStore: ObservableObject {
            let saved = try? JSONDecoder().decode([Trip].self, from: data) {
             trips = saved
         }
+        let before = trips.map(\.mode)
+        Self.reinferModes(&trips)
+        if trips.map(\.mode) != before { save() }
         // Indice subito disponibile (serve agli avvisi anche se l'app parte in background).
         index = Self.makeIndex(trips.filter { filter.includes($0) })
         rebuild()
@@ -46,6 +49,24 @@ final class TripStore: ObservableObject {
         trips.sort { $0.start < $1.start }
         changed()
         geocodeMissing()
+    }
+
+    /// Correzione a mano del mezzo di un viaggio.
+    func setMode(_ mode: TravelMode, for id: UUID) {
+        guard let i = trips.firstIndex(where: { $0.id == id }) else { return }
+        trips[i].mode = mode
+        changed()
+    }
+
+    /// Una volta sola: ricalcola il mezzo dei viaggi automatici con la regola nuova
+    /// (prima un viaggio in auto lento poteva risultare "bici").
+    static func reinferModes(_ trips: inout [Trip], defaults: UserDefaults = .standard) {
+        let key = "modeInference2"
+        guard !defaults.bool(forKey: key) else { return }
+        defaults.set(true, forKey: key)
+        for i in trips.indices where trips[i].automatic == true {
+            if let m = TravelMode.infer(points: trips[i].points) { trips[i].mode = m }
+        }
     }
 
     func delete(ids: Set<UUID>) {

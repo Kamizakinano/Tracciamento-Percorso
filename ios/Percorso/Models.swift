@@ -66,6 +66,29 @@ enum TravelMode: String, Codable, CaseIterable, Identifiable {
         if speed > 2.2 { return .bike } // > 8 km/h
         return .foot
     }
+
+    /// Ricava il mezzo di un viaggio da quanta strada è stata fatta a ogni velocità
+    /// (non dalla media, che le soste e la camminata dopo il parcheggio abbassano).
+    /// Auto: almeno un quarto della strada sopra i 29 km/h, o un decimo sopra i 40 km/h.
+    static func infer(points: [TrackPoint]) -> TravelMode? {
+        guard points.count > 1 else { return nil }
+        var moving = 0.0, fast = 0.0, veryFast = 0.0, cycling = 0.0
+        for i in 1..<points.count {
+            let dt = points[i].time.timeIntervalSince(points[i - 1].time)
+            guard dt > 0 else { continue }
+            let d = Geo.distance(points[i - 1], points[i])
+            let v = d / dt
+            guard v >= 0.8, v < 70 else { continue } // fermo, oppure errore del GPS
+            moving += d
+            if v > 8 { fast += d }
+            if v > 11 { veryFast += d }
+            if v > 2.5 { cycling += d }
+        }
+        guard moving >= 50 else { return nil }
+        if fast >= moving * 0.25 || veryFast >= moving * 0.1 { return .car }
+        if cycling >= moving * 0.5 { return .bike }
+        return .foot
+    }
 }
 
 // MARK: - Viaggio
@@ -94,6 +117,7 @@ struct Trip: Codable, Identifiable, Hashable {
     /// Mezzo salvato, oppure ricavato dalla velocità media.
     var effectiveMode: TravelMode {
         if let mode { return mode }
+        if let inferred = TravelMode.infer(points: points) { return inferred }
         let t = duration
         return TravelMode.infer(speed: t > 0 ? distance / t : 0)
     }
