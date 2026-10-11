@@ -17,6 +17,9 @@ Così durante i viaggi puoi scegliere strade nuove.
   strade). Se il GPS si ferma mentre ti stai muovendo (semaforo, coda,
   galleria), al risveglio il tratto mancante viene ricostruito lungo le strade
   invece di spezzare il viaggio.
+- **Pulsante ∞ sulla mappa**: accende o spegne con un tocco la registrazione
+  automatica (come "Registra sempre", funziona anche in background); verde =
+  attiva. Anche toccando "Automatico" in basso puoi disattivarla.
 - **Registra in un periodo** (impostazioni): scegli il giorno di inizio e di
   fine; in quei giorni ogni spostamento viene registrato da solo come con
   "Registra sempre", poi la registrazione si ferma. Notifica all'inizio e alla

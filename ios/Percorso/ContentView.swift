@@ -53,6 +53,7 @@ struct ContentView: View {
     @State private var showSearchHere = false
     @State private var searchingHere = false
     @State private var showParking = false
+    @State private var askStopAuto = false
     @State private var parkingStartsWithHistory = false
     /// "Portami all'auto": avvia la navigazione appena il percorso a piedi è pronto.
     @State private var walkToCarPending = false
@@ -173,6 +174,13 @@ struct ContentView: View {
         } message: {
             Text(Geo.formatKm(tracker.distance))
         }
+        .confirmationDialog("Registrazione automatica", isPresented: $askStopAuto, titleVisibility: .visible) {
+            Button("Disattiva registrazione automatica", role: .destructive, action: stopAutoRecording)
+            Button("Apri impostazioni") { showTrips = true }
+            Button("Annulla", role: .cancel) {}
+        } message: {
+            Text("Il viaggio in corso viene salvato.")
+        }
         .alert("Posizione non consentita", isPresented: $tracker.showDeniedAlert) {
             Button("Apri Impostazioni") {
                 if let url = URL(string: UIApplication.openSettingsURLString) {
@@ -225,6 +233,7 @@ struct ContentView: View {
                     mapStyleMenu
                     exploreButton
                     parkingButton
+                    autoRecordButton
                 }
                 .shadow(radius: 4)
             }
@@ -404,7 +413,7 @@ struct ContentView: View {
     private var recordButton: some View {
         Button {
             if tracker.isAutomatic {
-                showTrips = true
+                askStopAuto = true
             } else if tracker.isRecording {
                 tripName = ""
                 askName = true
@@ -453,6 +462,33 @@ struct ContentView: View {
         } label: {
             circleIcon("square.stack.3d.up")
         }
+    }
+
+    /// Accende e spegne la registrazione automatica (anche in background) con un tocco.
+    private var autoRecordButton: some View {
+        Button {
+            if tracker.isAutomatic {
+                askStopAuto = true
+            } else {
+                tracker.setAutoRecord(true)
+                info = "Registrazione automatica attiva, anche in background"
+                DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                    if info?.hasPrefix("Registrazione automatica") == true { info = nil }
+                }
+            }
+        } label: {
+            circleIcon("infinity", tint: tracker.isAutomatic ? .white : .accentColor,
+                       background: tracker.isAutomatic ? AnyShapeStyle(Color.green) : AnyShapeStyle(Material.regularMaterial))
+        }
+        .accessibilityLabel(tracker.isAutomatic ? "Disattiva registrazione automatica" : "Attiva registrazione automatica")
+    }
+
+    /// Spegne la registrazione automatica, anche quella di un periodo programmato in corso.
+    private func stopAutoRecording() {
+        if Settings.period?.contains(Date()) == true {
+            UserDefaults.standard.set(false, forKey: Settings.periodOn)
+        }
+        tracker.setAutoRecord(false)
     }
 
     private var exploreButton: some View {
