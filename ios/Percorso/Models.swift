@@ -141,6 +141,7 @@ enum Settings {
     static let autoRecord = "autoRecord"
     static let voiceAlert = "voiceAlert"       // 0 mai, 1 cuffie/CarPlay, 2 sempre
     static let mapStyle = "mapStyle"
+    static let showTraffic = "showTraffic"
     static let navigationVoice = "navigationVoice"
     static let parkingDetectKey = "parkingDetect"     // 0 no, 1 velocità e Bluetooth, 2 solo Bluetooth
     static let carBluetoothKey = "carBluetooth"       // nome del Bluetooth dell'auto

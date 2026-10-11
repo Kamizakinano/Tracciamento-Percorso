@@ -16,7 +16,8 @@ Così durante i viaggi puoi scegliere strade nuove.
   galleria), al risveglio il tratto mancante viene ricostruito lungo le strade
   invece di spezzare il viaggio.
 - **Colori per frequenza**: giallo = strada fatta 1 volta, arancione = 2-3
-  volte, rosso = 4 o più.
+  volte, rosso = 4 o più. Il traffico di Apple (linee con le freccette) è spento di
+  serie per non confondersi: si accende con "Mostra traffico" nel menu dei livelli.
 - **Strade nuove vicino a te** (pulsante ✨): scarica le strade della zona da
   OpenStreetMap e mostra in verde tratteggiato quelle che non hai mai fatto.
   Si aggiorna quando sposti la mappa.

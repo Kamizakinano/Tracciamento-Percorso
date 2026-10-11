@@ -22,6 +22,8 @@ struct MapView: UIViewRepresentable {
     var parking: ParkingSpot? = nil
     var parkingHints: [ParkingSpot] = []
     let mapType: MKMapType
+    /// Traffico di Apple (spento di serie: i suoi colori somigliano a quelli delle strade già fatte).
+    var showsTraffic = false
     let place: Place?
     /// Navigazione in corso: mappa inclinata che segue la direzione di marcia.
     var navigating = false
@@ -47,7 +49,6 @@ struct MapView: UIViewRepresentable {
         map.showsUserLocation = true
         map.showsCompass = true
         map.showsScale = true
-        map.showsTraffic = true
         map.showsBuildings = true
         // Lascia spazio ai pulsanti sopra e sotto la mappa.
         map.layoutMargins = UIEdgeInsets(top: 60, left: 8, bottom: 90, right: 70)
@@ -61,6 +62,7 @@ struct MapView: UIViewRepresentable {
         // In navigazione la mappa standard diventa più tenue, così il percorso risalta.
         let type: MKMapType = navigating && mapType == .standard ? .mutedStandard : mapType
         if map.mapType != type { map.mapType = type }
+        if map.showsTraffic != showsTraffic { map.showsTraffic = showsTraffic }
 
         if c.wasNavigating != navigating {
             c.wasNavigating = navigating

@@ -26,6 +26,7 @@ struct ContentView: View {
     @AppStorage(Settings.showHistory) private var showHistory = true
     @AppStorage(Settings.alertEnabled) private var alertEnabled = true
     @AppStorage(Settings.mapStyle) private var mapStyle = 0
+    @AppStorage(Settings.showTraffic) private var showTraffic = false
     @AppStorage(Settings.travelMode) private var travelMode = ""
 
     @State private var mapState = MapState()
@@ -75,6 +76,7 @@ struct ContentView: View {
                     parking: parking.current,
                     parkingHints: parkingHints,
                     mapType: mapType,
+                    showsTraffic: showTraffic,
                     place: place,
                     navigating: navigation.isActive,
                     follow: $follow,
@@ -438,6 +440,9 @@ struct ContentView: View {
                 Label("Standard", systemImage: "map").tag(0)
                 Label("Satellite con strade", systemImage: "map.fill").tag(1)
                 Label("Satellite", systemImage: "globe.europe.africa.fill").tag(2)
+            }
+            Toggle(isOn: $showTraffic) {
+                Label("Mostra traffico", systemImage: "car.2.fill")
             }
         } label: {
             circleIcon("square.stack.3d.up")
