@@ -52,7 +52,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     static let bridgeMinGap = 300.0
     static let bridgeMaxGap = 60_000.0
     /// Pausa: raggio del recinto intorno al punto di sosta.
-    static let restRegionRadius = 120.0
+    static let restRegionRadius = 80.0
     static let restRegionID = "percorso-sosta"
 
     private struct CurrentTrip: Codable {
@@ -309,7 +309,7 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             finishAutoSegment()
         }
         refreshSchedule()
-        // App aperta: GPS di nuovo acceso (se resti fermo, tra 3 minuti torna in pausa).
+        // App aperta: GPS di nuovo acceso (se resti fermo, tra 5 minuti torna in pausa).
         if resting { exitRest() }
         if isRecording { startLiveActivity() }
     }
@@ -690,11 +690,11 @@ enum PeriodReminders {
     }
 }
 
-/// Capisce quando sei fermo: nessuno spostamento oltre 40 m per 3 minuti.
+/// Capisce quando sei fermo: nessuno spostamento oltre 40 m per 5 minuti.
 /// I punti poco precisi non vengono passati, così il GPS che "balla" in casa non conta.
 struct RestDetector {
     static let radius = 40.0
-    static let restTime: TimeInterval = 180
+    static let restTime: TimeInterval = 300
 
     private(set) var anchor: TrackPoint?
     private(set) var since: Date?
