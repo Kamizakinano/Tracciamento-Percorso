@@ -90,6 +90,9 @@ Così durante i viaggi puoi scegliere strade nuove.
 - **Backup automatico**: scegli una cartella (per esempio in iCloud Drive) e a
   ogni viaggio salvato viene aggiornato `Percorso-backup.json`; "Ripristina da
   backup" lo ricarica. Funziona anche con un Apple ID gratuito.
+- **Cancella tutti i viaggi**: cestino accanto a "Viaggi" nel menu ☰, con
+  richiesta di conferma. Prima di cancellare viene salvata una copia del backup
+  (`Percorso-backup-copia-<data>.json`) per poterli recuperare.
 - **Mappa**: standard, satellite con strade o solo satellite; ricerca di
   indirizzi; import/export **GPX**.
 

@@ -14,3 +14,14 @@ final class MapOptionsTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: Settings.showTraffic))
     }
 }
+
+final class BackupCopyTests: XCTestCase {
+    func testCopyNameHasTheDay() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        let date = cal.date(from: DateComponents(year: 2026, month: 10, day: 12, hour: 12))!
+        XCTAssertEqual(BackupManager.copyName(date: date), "Percorso-backup-copia-2026-10-12.json")
+        XCTAssertNotEqual(BackupManager.copyName(date: date), BackupManager.fileName,
+                          "la copia non deve sovrascrivere il backup")
+    }
+}

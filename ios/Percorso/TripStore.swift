@@ -76,6 +76,16 @@ final class TripStore: ObservableObject {
         changed()
     }
 
+    /// Cancella tutti i viaggi. Prima conserva una copia del backup automatico,
+    /// che altrimenti verrebbe sovrascritto con un elenco vuoto.
+    @discardableResult
+    func deleteAll() -> String? {
+        let copy = BackupManager.shared.keepCopy()
+        trips = []
+        changed()
+        return copy
+    }
+
     func setFilter(_ newFilter: TripFilter) {
         guard newFilter != filter else { return }
         filter = newFilter

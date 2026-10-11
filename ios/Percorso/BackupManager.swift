@@ -97,6 +97,29 @@ final class BackupManager: ObservableObject {
         return true
     }
 
+    /// Nome della copia di sicurezza del backup (es. Percorso-backup-copia-2026-10-12.json).
+    static func copyName(date: Date = Date()) -> String {
+        "Percorso-backup-copia-\(date.formatted(.iso8601.year().month().day())).json"
+    }
+
+    /// Copia il backup dei viaggi accanto all'originale; restituisce il nome della copia.
+    func keepCopy(date: Date = Date()) -> String? {
+        guard let folder = resolveFolder() else { return nil }
+        let scoped = folder.startAccessingSecurityScopedResource()
+        defer { if scoped { folder.stopAccessingSecurityScopedResource() } }
+        let source = folder.appendingPathComponent(Self.fileName)
+        let name = Self.copyName(date: date)
+        let target = folder.appendingPathComponent(name)
+        var ok = false
+        var coordError: NSError?
+        NSFileCoordinator().coordinate(readingItemAt: source, options: [], writingItemAt: target,
+                                       options: .forReplacing, error: &coordError) { src, dst in
+            guard let data = try? Data(contentsOf: src) else { return }
+            ok = (try? data.write(to: dst, options: .atomic)) != nil
+        }
+        return ok ? name : nil
+    }
+
     /// Legge un file scelto dall'utente (backup dei viaggi o dei parcheggi).
     static func readFile(at url: URL) throws -> Data {
         let scoped = url.startAccessingSecurityScopedResource()

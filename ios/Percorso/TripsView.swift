@@ -33,6 +33,7 @@ struct TripsView: View {
     @State private var message: String?
     @State private var showStats = false
     @State private var showPassport = false
+    @State private var askDeleteAll = false
 
     static var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
@@ -184,7 +185,19 @@ struct TripsView: View {
                         store.delete(ids: Set(offsets.map { list[$0].id }))
                     }
                 } header: {
-                    Text("Viaggi (\(store.trips.count))")
+                    HStack {
+                        Text("Viaggi (\(store.trips.count))")
+                        Spacer()
+                        Button(role: .destructive) {
+                            askDeleteAll = true
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.body)
+                                .foregroundColor(store.trips.isEmpty ? .secondary : .red)
+                        }
+                        .disabled(store.trips.isEmpty)
+                        .accessibilityLabel("Cancella tutti i viaggi")
+                    }
                 } footer: {
                     Text("Tieni premuto un viaggio per correggere il mezzo (auto, bici, a piedi).")
                 }
@@ -233,6 +246,19 @@ struct TripsView: View {
             }
             .sheet(isPresented: $showStats) {
                 StatsView().environmentObject(store)
+            }
+            .confirmationDialog("Cancellare tutti i viaggi?", isPresented: $askDeleteAll, titleVisibility: .visible) {
+                Button("Cancella tutti i \(store.trips.count) viaggi", role: .destructive) {
+                    let count = store.trips.count
+                    let copy = store.deleteAll()
+                    message = copy.map { "Cancellati \(count) viaggi. Una copia del backup è stata salvata come \($0): puoi recuperarli con \"Ripristina da backup…\"." }
+                        ?? "Cancellati \(count) viaggi."
+                }
+                Button("Annulla", role: .cancel) {}
+            } message: {
+                Text(backup.isConfigured
+                     ? "Le strade colorate e le statistiche ripartono da zero. Prima viene salvata una copia del backup, così potrai recuperarli."
+                     : "Le strade colorate e le statistiche ripartono da zero. Non hai il backup automatico attivo: i viaggi non si potranno recuperare.")
             }
             .sheet(isPresented: $showPassport) {
                 PassportView(scrollToPlaces: ProcessInfo.processInfo.arguments.contains("-passportPlaces"))
