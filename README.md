@@ -11,8 +11,10 @@ Così durante i viaggi puoi scegliere strade nuove.
 - **Registra sempre** (impostazioni): registrazione automatica senza premere
   Avvia, anche con l'app chiusa. Ogni spostamento diventa un viaggio (si chiude
   dopo 5 minuti fermo, a un salto di 2 km o a mezzanotte). Serve il permesso di
-  posizione **"Sempre"**; quando sei fermo iOS sospende il GPS per risparmiare
-  batteria. Se il GPS si ferma mentre ti stai muovendo (semaforo, coda,
+  posizione **"Sempre"**. Per risparmiare batteria, dopo 3 minuti fermo l'app
+  spegne il GPS e mette un "recinto" di 120 m intorno a te: quando ne esci iOS
+  la risveglia e il GPS riparte (il tratto iniziale viene ricostruito lungo le
+  strade). Se il GPS si ferma mentre ti stai muovendo (semaforo, coda,
   galleria), al risveglio il tratto mancante viene ricostruito lungo le strade
   invece di spezzare il viaggio.
 - **Registra in un periodo** (impostazioni): scegli il giorno di inizio e di

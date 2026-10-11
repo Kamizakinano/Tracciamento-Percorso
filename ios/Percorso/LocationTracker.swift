@@ -22,7 +22,13 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     private var tripStart = Date()
     private var pendingStart = false
     private var pendingAuto = false
-    private var paused = false
+    /// In pausa per risparmiare batteria: GPS spento, "recinto" intorno a dove sei fermo.
+    private var resting = false
+    private var restDetector = RestDetector()
+    private var restTimer: Timer?
+    /// Dopo una pausa: il primo punto nuovo si collega al punto di sosta lungo le strade.
+    private var restAnchor: TrackPoint?
+    private var wokeFromRest = false
     private var unsavedPoints = 0
     private var recentSpeeds: [Double] = []
     private var lastNotification = Date.distantPast
@@ -45,6 +51,9 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     /// Buco nel tracciato (GPS sospeso, galleria) da ricostruire lungo le strade.
     static let bridgeMinGap = 300.0
     static let bridgeMaxGap = 60_000.0
+    /// Pausa: raggio del recinto intorno al punto di sosta.
+    static let restRegionRadius = 120.0
+    static let restRegionID = "percorso-sosta"
 
     private struct CurrentTrip: Codable {
         var start: Date
@@ -202,17 +211,30 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             break
         }
         requestNotifications()
+        // Recinto rimasto da una pausa prima che l'app venisse chiusa: riparti da lì.
+        if let old = manager.monitoredRegions.first(where: { $0.identifier == Self.restRegionID }) as? CLCircularRegion {
+            restAnchor = TrackPoint(lat: old.center.latitude, lon: old.center.longitude, time: Date())
+            wokeFromRest = true
+        }
+        stopRestRegion()
+        resting = false
+        restDetector.reset()
         configure(automatic: true)
         manager.startUpdatingLocation()
         manager.startMonitoringSignificantLocationChanges()
         isRecording = true
         isAutomatic = true
+        startRestTimer()
         startLiveActivity()
     }
 
     private func stopAuto() {
         endParkingDetection(next: nil)
         finishAutoSegment()
+        restTimer?.invalidate()
+        restTimer = nil
+        resting = false
+        stopRestRegion()
         manager.stopUpdatingLocation()
         manager.stopMonitoringSignificantLocationChanges()
         manager.allowsBackgroundLocationUpdates = false
@@ -227,7 +249,9 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
         // In automatico iOS sospende il GPS quando sei fermo e lo riattiva al primo spostamento.
         manager.pausesLocationUpdatesAutomatically = automatic
         manager.activityType = automatic ? .other : .otherNavigation
-        manager.distanceFilter = automatic ? 5 : currentMode.minStep
+        manager.distanceFilter = automatic ? 8 : currentMode.minStep
+        // In automatico basta la precisione "alta": quella da navigatore consuma molto di più.
+        manager.desiredAccuracy = automatic ? kCLLocationAccuracyBest : kCLLocationAccuracyBestForNavigation
     }
 
     /// Buco nel tracciato percorso senza fermarsi: velocità media tra 7 e 250 km/h.
@@ -285,6 +309,8 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             finishAutoSegment()
         }
         refreshSchedule()
+        // App aperta: GPS di nuovo acceso (se resti fermo, tra 3 minuti torna in pausa).
+        if resting { exitRest() }
         if isRecording { startLiveActivity() }
     }
 
@@ -335,20 +361,66 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     }
 
     func locationManagerDidPauseLocationUpdates(_ manager: CLLocationManager) {
-        // iOS sospende il GPS quando resti fermo: se stavi guidando, hai parcheggiato
-        // (salvo ripartire subito: vedi pauseParking).
+        // iOS sospende il GPS quando resti fermo.
+        if isAutomatic { enterRest() }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
+        guard region.identifier == Self.restRegionID else { return }
+        exitRest()
+    }
+
+    // MARK: - Pausa per risparmiare batteria
+
+    private func startRestTimer() {
+        restTimer?.invalidate()
+        // Il timer gira solo mentre il GPS tiene sveglia l'app: basta per accorgersi della sosta.
+        restTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            guard let self, self.isAutomatic, !self.resting, self.navigationInfo == nil,
+                  self.restDetector.isResting(now: Date()) else { return }
+            self.enterRest()
+        }
+    }
+
+    /// Fermo da qualche minuto: spegni il GPS e metti un recinto intorno a dove sei.
+    /// Quando ne esci iOS risveglia l'app (anche se è chiusa) e il GPS riparte.
+    private func enterRest() {
+        // Senza il permesso "Sempre" iOS non risveglierebbe l'app: niente pausa.
+        guard !resting, manager.authorizationStatus == .authorizedAlways else { return }
+        resting = true
+        // Se stavi guidando hai parcheggiato (salvo ripartire subito: vedi pauseParking).
         if detectsParking, case let .parked(point, left)? = parkingDetector.tripEnded(next: nil) {
             onParking?(.parked(point, left: left))
             pauseParking = point
         } else {
             parkingDetector.reset()
         }
-        paused = true
         persistCurrent()
+        let anchor = restDetector.anchor ?? points.last ?? manager.location.map(TrackPoint.init)
+        restAnchor = anchor
+        manager.stopUpdatingLocation()
+        if let anchor, CLLocationManager.isMonitoringAvailable(for: CLCircularRegion.self) {
+            let region = CLCircularRegion(center: anchor.coordinate, radius: Self.restRegionRadius,
+                                          identifier: Self.restRegionID)
+            region.notifyOnEntry = false
+            region.notifyOnExit = true
+            manager.startMonitoring(for: region)
+        }
     }
 
-    func locationManagerDidResumeLocationUpdates(_ manager: CLLocationManager) {
-        paused = false
+    private func exitRest() {
+        stopRestRegion()
+        guard resting else { return }
+        resting = false
+        wokeFromRest = true
+        restDetector.reset()
+        if isAutomatic { manager.startUpdatingLocation() }
+    }
+
+    private func stopRestRegion() {
+        for region in manager.monitoredRegions where region.identifier == Self.restRegionID {
+            manager.stopMonitoring(for: region)
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -362,10 +434,11 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             refreshSchedule()
         }
         guard isRecording else { return }
-        if isAutomatic && paused {
+        if isAutomatic && resting {
             // Risvegliati da un cambio di posizione significativo: riattiva il GPS preciso.
-            paused = false
-            manager.startUpdatingLocation()
+            if let a = restAnchor, let loc = locations.last,
+               Geo.distance(a, TrackPoint(loc)) < Self.restRegionRadius { return } // ancora lì
+            exitRest()
         }
         for loc in locations {
             guard loc.horizontalAccuracy >= 0, loc.horizontalAccuracy <= maxAccuracy,
@@ -373,8 +446,20 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
             updateMode(speed: loc.speed)
             onLocation?(loc)
             let p = TrackPoint(loc)
+            restDetector.feed(p)
+            // Primo punto dopo una pausa: collegalo al punto di sosta lungo le strade.
+            let afterRest = wokeFromRest
+            wokeFromRest = false
             var gapFrom: TrackPoint?
-            if let last = points.last, Self.isBridgeableGap(last: last, next: p) {
+            if afterRest, let last = points.last, Geo.distance(last, p) >= 30,
+               !(isAutomatic && Self.shouldSplit(last: last, next: p)) {
+                gapFrom = last
+                // Ferma pochi minuti (coda, semaforo lungo): non era un parcheggio.
+                if let pp = pauseParking, p.time.timeIntervalSince(last.time) < 600 {
+                    onParking?(.cancelled(pp))
+                    pauseParking = nil
+                }
+            } else if let last = points.last, Self.isBridgeableGap(last: last, next: p) {
                 // GPS sospeso o perso mentre ti muovevi: ricostruisci il tratto, non spezzare il viaggio.
                 gapFrom = last
                 if let pp = pauseParking {
@@ -385,6 +470,16 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
                 pauseParking = nil
                 endParkingDetection(next: p)
                 finishAutoSegment()
+            }
+            if afterRest, points.isEmpty, let a = restAnchor {
+                // Il nuovo viaggio parte da dove eri fermo, non da dove il GPS si è riacceso.
+                let d = Geo.distance(a, p)
+                if d >= 30 && d <= 5000 {
+                    let start = TrackPoint(lat: a.lat, lon: a.lon, time: p.time.addingTimeInterval(-max(10, d / 8)))
+                    points.append(start)
+                    tripStart = start.time
+                    gapFrom = start
+                }
             }
             feedParking(p, speed: loc.speed)
             let near = store.index.isNear(p, within: Settings.threshold(for: currentMode))
@@ -592,5 +687,31 @@ enum PeriodReminders {
             center.add(UNNotificationRequest(identifier: endID, content: content,
                                              trigger: UNTimeIntervalNotificationTrigger(timeInterval: b.to.timeIntervalSince(now), repeats: false)))
         }
+    }
+}
+
+/// Capisce quando sei fermo: nessuno spostamento oltre 40 m per 3 minuti.
+/// I punti poco precisi non vengono passati, così il GPS che "balla" in casa non conta.
+struct RestDetector {
+    static let radius = 40.0
+    static let restTime: TimeInterval = 180
+
+    private(set) var anchor: TrackPoint?
+    private(set) var since: Date?
+
+    mutating func feed(_ p: TrackPoint) {
+        if let a = anchor, Geo.distance(a, p) <= Self.radius { return }
+        anchor = p
+        since = p.time
+    }
+
+    func isResting(now: Date) -> Bool {
+        guard let since else { return false }
+        return now.timeIntervalSince(since) >= Self.restTime
+    }
+
+    mutating func reset() {
+        anchor = nil
+        since = nil
     }
 }
