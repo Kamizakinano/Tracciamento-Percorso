@@ -77,7 +77,7 @@ struct PlaceSample: Codable, Equatable {
 // MARK: - Medaglie
 
 enum MedalLevel: Int, Comparable {
-    case locked, bronze, silver, gold, platinum
+    case locked, bronze, silver, gold, platinum, diamond
 
     static func < (a: MedalLevel, b: MedalLevel) -> Bool { a.rawValue < b.rawValue }
 
@@ -88,33 +88,85 @@ enum MedalLevel: Int, Comparable {
         case .silver: return "Argento"
         case .gold: return "Oro"
         case .platinum: return "Platino"
+        case .diamond: return "Diamante"
         }
     }
+}
+
+enum MedalGroup: String, CaseIterable {
+    case places = "Luoghi visitati a piedi"
+    case distance = "Chilometri"
+    case records = "Imprese"
 }
 
 struct MedalDefinition {
     let id: String
     let title: String
     let icon: String
-    /// Soglie per bronzo, argento, oro, platino (anche meno di quattro).
+    let group: MedalGroup
+    /// Soglie per bronzo, argento, oro, platino e diamante (anche meno di cinque).
     let thresholds: [Double]
     let unit: String
 
     static let all: [MedalDefinition] = [
-        MedalDefinition(id: "comune", title: "Comuni", icon: PlaceKind.comune.icon, thresholds: [5, 25, 100, 250], unit: "comuni"),
-        MedalDefinition(id: "provincia", title: "Province", icon: PlaceKind.provincia.icon, thresholds: [2, 5, 15, 40], unit: "province"),
-        MedalDefinition(id: "regione", title: "Regioni", icon: PlaceKind.regione.icon, thresholds: [2, 5, 10, 20], unit: "regioni"),
-        MedalDefinition(id: "stato", title: "Stati", icon: PlaceKind.stato.icon, thresholds: [2, 5, 10, 20], unit: "stati"),
-        MedalDefinition(id: "giornata", title: "Giornata da esploratore", icon: "sun.max.fill", thresholds: [5, 10, 20], unit: "comuni nuovi in un giorno"),
-        MedalDefinition(id: "nuove", title: "Strade nuove", icon: "sparkles", thresholds: [10, 100, 500, 1000], unit: "km su strade nuove"),
-        MedalDefinition(id: "lungo", title: "Viaggio lungo", icon: "road.lanes", thresholds: [50, 100, 300, 500], unit: "km in un viaggio"),
+        // Luoghi (solo a piedi)
+        MedalDefinition(id: "comune", title: "Comuni", icon: PlaceKind.comune.icon, group: .places, thresholds: [5, 25, 100, 250, 500], unit: "comuni"),
+        MedalDefinition(id: "provincia", title: "Province", icon: PlaceKind.provincia.icon, group: .places, thresholds: [2, 5, 15, 40, 80], unit: "province"),
+        MedalDefinition(id: "regione", title: "Regioni", icon: PlaceKind.regione.icon, group: .places, thresholds: [2, 5, 10, 20, 40], unit: "regioni"),
+        MedalDefinition(id: "stato", title: "Stati", icon: PlaceKind.stato.icon, group: .places, thresholds: [2, 5, 10, 20, 40], unit: "stati"),
+        MedalDefinition(id: "giornata", title: "Giornata da esploratore", icon: "sun.max.fill", group: .places, thresholds: [3, 5, 10, 20], unit: "comuni nuovi in un giorno"),
+        // Chilometri
+        MedalDefinition(id: "km", title: "Km totali", icon: "speedometer", group: .distance, thresholds: [100, 500, 1000, 5000, 10000], unit: "km"),
+        MedalDefinition(id: "kmPiedi", title: "A piedi", icon: "figure.walk", group: .distance, thresholds: [10, 50, 100, 500, 1000], unit: "km a piedi"),
+        MedalDefinition(id: "kmBici", title: "In bici", icon: "bicycle", group: .distance, thresholds: [25, 100, 500, 1000, 3000], unit: "km in bici"),
+        MedalDefinition(id: "kmAuto", title: "In auto", icon: "car.fill", group: .distance, thresholds: [500, 2000, 5000, 10000, 25000], unit: "km in auto"),
+        MedalDefinition(id: "nuove", title: "Strade nuove", icon: "sparkles", group: .distance, thresholds: [10, 100, 500, 1000, 2500], unit: "km su strade nuove"),
+        // Imprese
+        MedalDefinition(id: "lungo", title: "Viaggio lungo", icon: "road.lanes", group: .records, thresholds: [50, 100, 300, 500, 1000], unit: "km in un viaggio"),
+        MedalDefinition(id: "mese", title: "Mese da record", icon: "calendar", group: .records, thresholds: [100, 300, 600, 1000, 2000], unit: "km in un mese"),
+        MedalDefinition(id: "viaggi", title: "Viaggiatore", icon: "point.topleft.down.curvedto.point.bottomright.up", group: .records, thresholds: [10, 50, 100, 250, 500], unit: "viaggi"),
     ]
+}
+
+/// Record personali: le "classifiche" dei tuoi viaggi.
+struct PersonalRecords: Equatable {
+    struct Entry: Equatable, Identifiable {
+        let id: String
+        let title: String
+        let date: Date
+        let km: Double
+    }
+
+    var longestTrips: [Entry] = []
+    var bestMonths: [Entry] = []
+    var bestDays: [Entry] = []
+
+    static func compute(_ trips: [Trip], top: Int = 3, calendar: Calendar = .current) -> PersonalRecords {
+        var r = PersonalRecords()
+        r.longestTrips = trips.filter { $0.distance > 0 }.sorted { $0.distance > $1.distance }.prefix(top).map {
+            Entry(id: $0.id.uuidString, title: $0.title, date: $0.start, km: $0.distance / 1000)
+        }
+        func best(_ component: Calendar.Component, title: (Date) -> String) -> [Entry] {
+            var totals: [Date: Double] = [:]
+            for t in trips {
+                let key = calendar.dateInterval(of: component, for: t.start)?.start ?? t.start
+                totals[key, default: 0] += t.distance / 1000
+            }
+            return totals.filter { $0.value > 0 }.sorted { $0.value > $1.value }.prefix(top).map {
+                Entry(id: "\(component)-\($0.key.timeIntervalSince1970)", title: title($0.key), date: $0.key, km: $0.value)
+            }
+        }
+        r.bestMonths = best(.month) { $0.formatted(.dateTime.month(.wide).year()) }
+        r.bestDays = best(.day) { $0.formatted(date: .abbreviated, time: .omitted) }
+        return r
+    }
 }
 
 struct MedalProgress: Identifiable, Equatable {
     let id: String
     let title: String
     let icon: String
+    let group: MedalGroup
     let unit: String
     let value: Double
     let level: MedalLevel
@@ -241,17 +293,27 @@ struct Passport: Codable {
     func medals(trips: [Trip]) -> [MedalProgress] {
         let newKm = trips.reduce(0.0) { $0 + $1.distance * ($1.newFraction ?? 0) } / 1000
         let longestKm = (trips.map(\.distance).max() ?? 0) / 1000
+        func km(_ mode: TravelMode?) -> Double {
+            trips.filter { mode == nil || $0.effectiveMode == mode }.reduce(0.0) { $0 + $1.distance } / 1000
+        }
+        let bestMonth = PersonalRecords.compute(trips, top: 1).bestMonths.first?.km ?? 0
         return MedalDefinition.all.map { def in
             let value: Double
             switch def.id {
             case "giornata": value = Double(bestDay())
             case "nuove": value = newKm
             case "lungo": value = longestKm
+            case "km": value = km(nil)
+            case "kmPiedi": value = km(.foot)
+            case "kmBici": value = km(.bike)
+            case "kmAuto": value = km(.car)
+            case "mese": value = bestMonth
+            case "viaggi": value = Double(trips.count)
             default: value = Double(PlaceKind(rawValue: def.id).map(count) ?? 0)
             }
             let reachedCount = def.thresholds.filter { value >= $0 }.count
             let level = MedalLevel(rawValue: reachedCount) ?? .locked
-            return MedalProgress(id: def.id, title: def.title, icon: def.icon, unit: def.unit, value: value,
+            return MedalProgress(id: def.id, title: def.title, icon: def.icon, group: def.group, unit: def.unit, value: value,
                                  level: level,
                                  next: reachedCount < def.thresholds.count ? def.thresholds[reachedCount] : nil,
                                  reached: reachedCount > 0 ? def.thresholds[reachedCount - 1] : 0)
@@ -323,6 +385,7 @@ final class PassportStore: ObservableObject {
     }
 
     var medals: [MedalProgress] { passport.medals(trips: latestTrips) }
+    var records: PersonalRecords { PersonalRecords.compute(latestTrips) }
 
     /// Analizza i viaggi nuovi (pochi alla volta: Apple limita le richieste).
     func update(with trips: [Trip]) {

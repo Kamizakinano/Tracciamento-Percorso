@@ -80,8 +80,10 @@ Così durante i viaggi puoi scegliere strade nuove.
 - **Passaporto e medaglie** (menu ☰): comuni, province, regioni e stati che
   hai visitato **a piedi** (almeno 200 m camminati; passarci in auto non conta) (anche dai viaggi già registrati), con la data della prima
   visita. Medaglie a livelli (bronzo, argento, oro, platino) per comuni,
-  province, regioni, stati, comuni nuovi in un giorno, km su strade nuove e
-  viaggio più lungo, con la barra verso il prossimo traguardo. Notifica "Nuovo
+  province, regioni, stati, comuni nuovi in un giorno, km totali, a piedi, in
+  bici, in auto, su strade nuove, viaggio più lungo, mese da record e numero di
+  viaggi (fino al livello diamante), con la barra verso il prossimo traguardo.
+  Record personali: viaggi più lunghi, mesi e giorni con più km. Notifica "Nuovo
   comune!" durante la registrazione e quando sblocchi una medaglia. I nomi dei
   luoghi vengono da Apple (serve internet; i viaggi lunghi richiedono qualche
   minuto).

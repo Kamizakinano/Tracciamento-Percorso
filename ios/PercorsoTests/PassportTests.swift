@@ -64,7 +64,7 @@ final class PassportTests: XCTestCase {
         for i in 0..<6 { p.record(sample("Giro \(i)"), at: noon.addingTimeInterval(Double(i) * 600)) }
         p.record(sample("Altro giorno"), at: noon.addingTimeInterval(5 * 86400))
         XCTAssertEqual(p.bestDay(), 6)
-        XCTAssertEqual(p.medals(trips: []).first { $0.id == "giornata" }?.level, .bronze)
+        XCTAssertEqual(p.medals(trips: []).first { $0.id == "giornata" }?.level, .silver, "6 comuni nuovi in un giorno (3 e 5)")
     }
 
     func testMedalsUnlockOnlyOnce() {
@@ -162,5 +162,55 @@ final class PassportTests: XCTestCase {
         XCTAssertTrue(p.processedTrips.isEmpty, "i viaggi vengono rianalizzati")
         XCTAssertNotNil(p.cache["1:1"], "i nomi già scaricati restano")
         XCTAssertFalse(p.migrateIfNeeded())
+    }
+
+    // MARK: - Chilometri e record
+
+    /// Viaggio verso nord di `km` chilometri con il mezzo dato.
+    private func trip(km: Double, mode: TravelMode, daysAgo: Double, base: Date) -> Trip {
+        let start = base.addingTimeInterval(-daysAgo * 86400)
+        let pts = (0...10).map { TrackPoint(lat: 45 + Double($0) * km / 10 / 111.195, lon: 9, time: start.addingTimeInterval(Double($0) * 60)) }
+        return Trip(start: start, points: pts, mode: mode)
+    }
+
+    func testKilometreMedalsByMode() {
+        let base = Date(timeIntervalSince1970: 1_780_000_000)
+        let trips = [trip(km: 300, mode: .car, daysAgo: 1, base: base),
+                     trip(km: 260, mode: .car, daysAgo: 2, base: base),
+                     trip(km: 12, mode: .foot, daysAgo: 3, base: base),
+                     trip(km: 30, mode: .bike, daysAgo: 4, base: base)]
+        let m = Dictionary(uniqueKeysWithValues: Passport().medals(trips: trips).map { ($0.id, $0) })
+        XCTAssertEqual(m["km"]?.value ?? 0, 602, accuracy: 1)
+        XCTAssertEqual(m["km"]?.level, .silver, "602 km: oltre 100 e 500")
+        XCTAssertEqual(m["kmAuto"]?.level, .bronze, "560 km in auto")
+        XCTAssertEqual(m["kmPiedi"]?.level, .bronze, "12 km a piedi")
+        XCTAssertEqual(m["kmBici"]?.level, .bronze, "30 km in bici")
+        XCTAssertEqual(m["viaggi"]?.level, .locked, "4 viaggi su 10")
+        XCTAssertEqual(m["lungo"]?.level, .gold, "300 km in un viaggio")
+    }
+
+    func testDiamondLevel() {
+        let base = Date(timeIntervalSince1970: 1_780_000_000)
+        let m = Passport().medals(trips: [trip(km: 1100, mode: .car, daysAgo: 0, base: base)]).first { $0.id == "lungo" }
+        XCTAssertEqual(m?.level, .diamond)
+        XCTAssertNil(m?.next, "livello massimo")
+        XCTAssertEqual(m?.progress, 1)
+    }
+
+    func testPersonalRecords() {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone(identifier: "UTC")!
+        func day(_ m: Int, _ d: Int) -> Date { cal.date(from: DateComponents(year: 2026, month: m, day: d, hour: 12))! }
+        func t(_ km: Double, _ date: Date) -> Trip {
+            Trip(start: date, points: [TrackPoint(lat: 45, lon: 9, time: date),
+                                       TrackPoint(lat: 45 + km / 111.195, lon: 9, time: date.addingTimeInterval(3600))])
+        }
+        let trips = [t(50, day(9, 1)), t(30, day(9, 1)), t(120, day(10, 5)), t(10, day(10, 6)), t(5, day(8, 20))]
+        let r = PersonalRecords.compute(trips, calendar: cal)
+        XCTAssertEqual(r.longestTrips.map { Int($0.km.rounded()) }, [120, 50, 30])
+        XCTAssertEqual(r.bestMonths.map { Int($0.km.rounded()) }, [130, 80, 5], "ottobre, settembre, agosto")
+        XCTAssertEqual(r.bestDays.first.map { Int($0.km.rounded()) }, 120)
+        XCTAssertEqual(r.bestDays[1].km, 80, accuracy: 0.5, "due viaggi lo stesso giorno si sommano")
+        XCTAssertTrue(PersonalRecords.compute([]).longestTrips.isEmpty)
     }
 }

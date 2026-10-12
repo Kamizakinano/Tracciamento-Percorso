@@ -5,8 +5,8 @@ struct PassportView: View {
     @EnvironmentObject private var passport: PassportStore
     @Environment(\.dismiss) private var dismiss
     @State private var kind: PlaceKind = .comune
-    /// Scorri subito all'elenco dei luoghi (usato dagli screenshot).
-    var scrollToPlaces = false
+    /// Scorri subito a una sezione: "luoghi" o "km" (usato dagli screenshot).
+    var scrollTarget: String? = nil
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -21,18 +21,23 @@ struct PassportView: View {
                                 .font(.footnote)
                                 .foregroundColor(.secondary)
                         }
-                        Text("Medaglie").font(.title3.weight(.bold))
-                        LazyVGrid(columns: columns, spacing: 12) {
-                            ForEach(passport.medals) { MedalCard(medal: $0) }
+                        let medals = passport.medals
+                        ForEach(MedalGroup.allCases, id: \.self) { group in
+                            Text(group.rawValue).font(.title3.weight(.bold))
+                                .id(group == .distance ? "km" : group.rawValue)
+                            LazyVGrid(columns: columns, spacing: 12) {
+                                ForEach(medals.filter { $0.group == group }) { MedalCard(medal: $0) }
+                            }
                         }
+                        recordsSection
                         places.id("luoghi")
                     }
                     .padding()
                 }
                 .background(Color(uiColor: .systemGroupedBackground))
                 .onAppear {
-                    if scrollToPlaces {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo("luoghi", anchor: .top) }
+                    if let target = scrollTarget {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { proxy.scrollTo(target, anchor: .top) }
                     }
                 }
             }
@@ -71,6 +76,58 @@ struct PassportView: View {
                 .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
             }
         }
+    }
+
+    // MARK: - Record personali
+
+    private var recordsSection: some View {
+        let r = passport.records
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("I tuoi record").font(.title3.weight(.bold))
+            recordList("Viaggi più lunghi", icon: "road.lanes", entries: r.longestTrips)
+            recordList("Mesi con più km", icon: "calendar", entries: r.bestMonths)
+            recordList("Giorni con più km", icon: "sun.max.fill", entries: r.bestDays)
+        }
+    }
+
+    private func recordList(_ title: String, icon: String, entries: [PersonalRecords.Entry]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.accentColor)
+                .padding(12)
+            if entries.isEmpty {
+                Text("Ancora nessun viaggio.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .padding([.horizontal, .bottom], 12)
+            }
+            ForEach(Array(entries.enumerated()), id: \.element.id) { i, e in
+                HStack(spacing: 10) {
+                    Text(["🥇", "🥈", "🥉"][min(i, 2)])
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(e.title)
+                            .font(.subheadline)
+                            .foregroundColor(Color(uiColor: .label))
+                            .lineLimit(1)
+                        if title == "Viaggi più lunghi" {
+                            Text(e.date.formatted(date: .abbreviated, time: .omitted))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Text(Geo.formatKm(e.km * 1000))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(Color(uiColor: .label))
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+            }
+        }
+        .padding(.bottom, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 14))
     }
 
     // MARK: - Luoghi
@@ -174,6 +231,7 @@ struct MedalCard: View {
         case .silver: return Color(red: 0.55, green: 0.6, blue: 0.66)
         case .gold: return Color(red: 0.9, green: 0.68, blue: 0.1)
         case .platinum: return Color(red: 0.2, green: 0.62, blue: 0.7)
+        case .diamond: return Color(red: 0.55, green: 0.35, blue: 0.95)
         }
     }
 }

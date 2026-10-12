@@ -70,6 +70,7 @@ rm -rf "$DOCS/parking.json" "$DOCS/Parcheggi"  # gli altri screenshot senza auto
 # Passaporto e medaglie (dati di prova).
 shot 19-passaporto -passportDemo -showTrips -showPassport
 shot 20-passaporto-luoghi -passportDemo -showTrips -showPassport -passportPlaces
+shot 21-passaporto-km -passportDemo -showTrips -showPassport -passportKm
 rm -f "$DOCS/passport.json"
 
 # Registrazione programmata (in fondo: poi viene spenta).

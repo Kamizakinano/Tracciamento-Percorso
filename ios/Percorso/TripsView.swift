@@ -35,6 +35,14 @@ struct TripsView: View {
     @State private var showPassport = false
     @State private var askDeleteAll = false
 
+    /// Sezione del Passaporto da mostrare negli screenshot.
+    private static var passportScrollTarget: String? {
+        let args = ProcessInfo.processInfo.arguments
+        if args.contains("-passportPlaces") { return "luoghi" }
+        if args.contains("-passportKm") { return "km" }
+        return nil
+    }
+
     static var appVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
     }
@@ -261,7 +269,7 @@ struct TripsView: View {
                      : "Le strade colorate e le statistiche ripartono da zero. Non hai il backup automatico attivo: i viaggi non si potranno recuperare.")
             }
             .sheet(isPresented: $showPassport) {
-                PassportView(scrollToPlaces: ProcessInfo.processInfo.arguments.contains("-passportPlaces"))
+                PassportView(scrollTarget: Self.passportScrollTarget)
                     .environmentObject(passport)
             }
             .alert(message ?? "", isPresented: Binding(get: { message != nil },
