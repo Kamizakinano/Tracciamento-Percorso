@@ -175,18 +175,18 @@ final class PassportTests: XCTestCase {
 
     func testKilometreMedalsByMode() {
         let base = Date(timeIntervalSince1970: 1_780_000_000)
-        let trips = [trip(km: 300, mode: .car, daysAgo: 1, base: base),
+        let trips = [trip(km: 310, mode: .car, daysAgo: 1, base: base),
                      trip(km: 260, mode: .car, daysAgo: 2, base: base),
                      trip(km: 12, mode: .foot, daysAgo: 3, base: base),
                      trip(km: 30, mode: .bike, daysAgo: 4, base: base)]
         let m = Dictionary(uniqueKeysWithValues: Passport().medals(trips: trips).map { ($0.id, $0) })
-        XCTAssertEqual(m["km"]?.value ?? 0, 602, accuracy: 1)
-        XCTAssertEqual(m["km"]?.level, .silver, "602 km: oltre 100 e 500")
-        XCTAssertEqual(m["kmAuto"]?.level, .bronze, "560 km in auto")
+        XCTAssertEqual(m["km"]?.value ?? 0, 612, accuracy: 1)
+        XCTAssertEqual(m["km"]?.level, .silver, "612 km: oltre 100 e 500")
+        XCTAssertEqual(m["kmAuto"]?.level, .bronze, "570 km in auto")
         XCTAssertEqual(m["kmPiedi"]?.level, .bronze, "12 km a piedi")
         XCTAssertEqual(m["kmBici"]?.level, .bronze, "30 km in bici")
         XCTAssertEqual(m["viaggi"]?.level, .locked, "4 viaggi su 10")
-        XCTAssertEqual(m["lungo"]?.level, .gold, "300 km in un viaggio")
+        XCTAssertEqual(m["lungo"]?.level, .gold, "310 km in un viaggio")
     }
 
     func testDiamondLevel() {
