@@ -4,7 +4,7 @@ import MapKit
 // MARK: - Luoghi da vedere
 
 enum SightKind: String, Codable, CaseIterable {
-    case monument, church, castle, museum, viewpoint, artwork, park, square, fountain, ruins, attraction
+    case monument, church, castle, museum, viewpoint, artwork, park, square, fountain, ruins, attraction, lake
 
     var label: String {
         switch self {
@@ -19,6 +19,16 @@ enum SightKind: String, Codable, CaseIterable {
         case .fountain: return "Fontana"
         case .ruins: return "Rovine"
         case .attraction: return "Da vedere"
+        case .lake: return "Lago"
+        }
+    }
+
+    /// A che distanza dal centro conta come "raggiunto" (parchi e laghi sono grandi).
+    var seenRadius: Double {
+        switch self {
+        case .lake: return 250
+        case .park: return 100
+        default: return 40
         }
     }
 
@@ -35,6 +45,7 @@ enum SightKind: String, Codable, CaseIterable {
         case .fountain: return "drop.fill"
         case .ruins: return "hammer.fill"
         case .attraction: return "star.fill"
+        case .lake: return "water.waves"
         }
     }
 
@@ -54,6 +65,7 @@ enum SightKind: String, Codable, CaseIterable {
         case "attraction": return t["amenity"] == "place_of_worship" ? .church : .attraction
         default: break
         }
+        if t["natural"] == "water", ["lake", "reservoir", "lagoon"].contains(t["water"] ?? "") { return .lake }
         if t["amenity"] == "place_of_worship" { return .church }
         if t["amenity"] == "fountain" { return .fountain }
         if t["leisure"] == "park" || t["leisure"] == "garden" { return .park }
@@ -61,6 +73,12 @@ enum SightKind: String, Codable, CaseIterable {
         if t["historic"] != nil { return .monument }
         return nil
     }
+}
+
+/// Luogo di "Scopri" raggiunto (per le medaglie).
+struct SightVisit: Codable, Equatable {
+    let kind: SightKind
+    let date: Date
 }
 
 struct Sight: Identifiable, Hashable {
@@ -94,8 +112,9 @@ final class DiscoverService: ObservableObject {
     @Published private(set) var version = 0
     @Published private(set) var isLoading = false
     @Published private(set) var message: String?
-    /// Luoghi già visti (ci sei passato vicino).
-    @Published private(set) var visited: Set<String> = []
+    /// Luoghi già visti (ci sei passato vicino), con tipo e data.
+    @Published private(set) var visits: [String: SightVisit] = [:]
+    var visited: Set<String> { Set(visits.keys) }
     /// Suggerimenti chiusi con la ✕ in questa sessione.
     @Published private(set) var dismissed: Set<String> = []
 
@@ -108,10 +127,22 @@ final class DiscoverService: ObservableObject {
     private let visitedURL: URL
 
     init(directory: URL = TripStore.documents) {
-        visitedURL = directory.appendingPathComponent("sights-visited.json")
-        if let data = try? Data(contentsOf: visitedURL), let ids = try? JSONDecoder().decode([String].self, from: data) {
-            visited = Set(ids)
-        }
+        visitedURL = Self.visitsURL(directory)
+        visits = Self.loadVisitMap(visitedURL)
+    }
+
+    private static func visitsURL(_ directory: URL) -> URL {
+        directory.appendingPathComponent("sights-visited.json")
+    }
+
+    private static func loadVisitMap(_ url: URL) -> [String: SightVisit] {
+        guard let data = try? Data(contentsOf: url) else { return [:] }
+        return (try? JSONDecoder().decode([String: SightVisit].self, from: data)) ?? [:]
+    }
+
+    /// Luoghi raggiunti, letti dal file (usato dal Passaporto per le medaglie).
+    static func loadVisits(directory: URL) -> [SightVisit] {
+        Array(loadVisitMap(visitsURL(directory)).values)
     }
 
     func toggle(center: CLLocationCoordinate2D?) {
@@ -135,13 +166,15 @@ final class DiscoverService: ObservableObject {
         load(around: center)
     }
 
-    /// Posizione attuale: segna come visti i luoghi a pochi metri.
-    func update(location: CLLocationCoordinate2D) {
-        let near = sights.filter { !visited.contains($0.id) && Geo.distance($0.coordinate, location) <= Self.seenRadius }
-        guard !near.isEmpty else { return }
-        visited.formUnion(near.map(\.id))
+    /// Posizione attuale: segna come visti i luoghi a pochi metri. Restituisce true se ce ne sono di nuovi.
+    @discardableResult
+    func update(location: CLLocationCoordinate2D, now: Date = Date()) -> Bool {
+        let near = sights.filter { visits[$0.id] == nil && Geo.distance($0.coordinate, location) <= $0.kind.seenRadius }
+        guard !near.isEmpty else { return false }
+        for s in near { visits[s.id] = SightVisit(kind: s.kind, date: now) }
         version += 1
-        try? JSONEncoder().encode(Array(visited)).write(to: visitedURL, options: .atomic)
+        try? JSONEncoder().encode(visits).write(to: visitedURL, options: .atomic)
+        return true
     }
 
     func dismiss(_ sight: Sight) {
@@ -192,7 +225,7 @@ final class DiscoverService: ObservableObject {
         var best: (Double, SightSuggestion)?
         for s in candidates {
             let d = Geo.distance(p, s.coordinate)
-            guard d <= suggestRadius, d > seenRadius else { continue }
+            guard d <= suggestRadius, d > s.kind.seenRadius else { continue }
             var cost = d - Double(s.score) * 60
             if let heading {
                 let diff = abs(angleDifference(heading, bearing(from: p, to: s.coordinate)))
@@ -239,6 +272,7 @@ final class DiscoverService: ObservableObject {
           nwr["amenity"="fountain"]["name"]\(a);
           nwr["leisure"~"^(park|garden)$"]["name"]["wikidata"]\(a);
           nwr["place"="square"]["name"]\(a);
+          nwr["natural"="water"]["water"~"^(lake|reservoir|lagoon)$"]["name"]\(a);
         );
         out center tags;
         """
@@ -319,7 +353,7 @@ final class DiscoverService: ObservableObject {
             Sight(id: "d/6", name: "Chiesa di San Fedele", kind: .church, lat: 45.4665, lon: 9.1922, score: 4),
             Sight(id: "d/7", name: "Monumento a Leonardo", kind: .monument, lat: 45.4668, lon: 9.1899, score: 3),
         ]
-        visited = ["d/1"]
+        visits = ["d/1": SightVisit(kind: .church, date: Date())]
         loadedCenter = CLLocationCoordinate2D(latitude: 45.4642, longitude: 9.1900) // niente download
         version += 1
     }

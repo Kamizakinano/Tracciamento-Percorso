@@ -89,7 +89,10 @@ Così durante i viaggi puoi scegliere strade nuove.
   province, regioni, stati, comuni nuovi in un giorno, km totali, a piedi, in
   bici, in auto, su strade nuove, viaggio più lungo, mese da record e numero di
   viaggi (fino al livello diamante), con la barra verso il prossimo traguardo.
-  Record personali: viaggi più lunghi, mesi e giorni con più km. Notifica "Nuovo
+  Record personali: viaggi più lunghi, mesi e giorni con più km.
+  Esplorazione (Cacciatore di strade, Seconda visita, Esploratore metodico,
+  Occhio attento), Natura (parchi, laghi, punti panoramici di "Scopri") e Sfide
+  speciali (comuni in un autunno, strade nuove in un weekend). Notifica "Nuovo
   comune!" durante la registrazione e quando sblocchi una medaglia. I nomi dei
   luoghi vengono da Apple (serve internet; i viaggi lunghi richiedono qualche
   minuto).

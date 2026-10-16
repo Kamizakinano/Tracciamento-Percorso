@@ -94,7 +94,7 @@ struct ContentView: View {
                     onRegionChange: regionChanged,
                     onUserLocation: { here in
                         mapState.userLocation = here
-                        discover.update(location: here)
+                        if discover.update(location: here) { passport.sightsChanged() }
                         discover.moved(to: here)
                     },
                     onSelectResult: selectResult,

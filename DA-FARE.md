@@ -17,5 +17,10 @@ Elenco delle richieste rimandate (aggiornato in chat). Si fanno una alla volta, 
    sbagliati e comuni mancanti nel Passaporto, con gli screenshot dell'utente.
 5. **Scopri – Giro dei monumenti**: scegli il tempo (30 min, 1 h, 2 h) e l'app crea un anello a piedi
    che passa da 3–6 luoghi vicini preferendo strade nuove (le prime parti di Scopri sono nella 1.6).
-6. **Hub**: app contenitore con Percorso, Spese e Resi (vedi il testo PROMPT-Hub.md in chat).
+6. **Medaglie che richiedono i quartieri / la rete stradale OSM** (funzione "Esplora la città"):
+   Primo quartiere, Cartografo (25% di una città), Città conquistata (100% delle strade di un'area),
+   5 quartieri nuovi in un mese; Sentieri completati e km a piedi nella natura (sentieri e aree verdi OSM);
+   3 città d'arte in un anno (proposta: comune con almeno 5 attrazioni raggiunte).
+   Tenere separati completamento delle strade e delle attrazioni.
+7. **Hub**: app contenitore con Percorso, Spese e Resi (vedi il testo PROMPT-Hub.md in chat).
    Dopo la prima versione chiedere: compilazione subito su richiesta o una volta per notte.

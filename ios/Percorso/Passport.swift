@@ -44,6 +44,8 @@ struct VisitedPlace: Codable, Identifiable, Hashable {
     var parent: String?
     var country: String?
     var firstVisit: Date
+    /// Giorni (inizio giornata) in cui ci sei stato: per "Seconda visita" e "Esploratore metodico".
+    var visitDays: [Date]?
 
     var id: String { Self.key(kind, name, country) }
 
@@ -95,8 +97,19 @@ enum MedalLevel: Int, Comparable {
 
 enum MedalGroup: String, CaseIterable {
     case places = "Luoghi visitati a piedi"
+    case exploration = "Esplorazione"
     case distance = "Chilometri"
     case records = "Imprese"
+    case nature = "Natura"
+    case special = "Sfide speciali"
+}
+
+/// Dati per le medaglie che non vengono dai luoghi del Passaporto.
+struct MedalExtras: Equatable {
+    /// Inizio di ogni "strada nuova" percorsa (tratto nuovo continuo di almeno 150 m).
+    var newStreetRuns: [Date] = []
+    /// Luoghi di "Scopri" raggiunti.
+    var sights: [SightVisit] = []
 }
 
 struct MedalDefinition {
@@ -125,6 +138,18 @@ struct MedalDefinition {
         MedalDefinition(id: "lungo", title: "Viaggio lungo", icon: "road.lanes", group: .records, thresholds: [50, 100, 300, 500, 1000], unit: "km in un viaggio"),
         MedalDefinition(id: "mese", title: "Mese da record", icon: "calendar", group: .records, thresholds: [100, 300, 600, 1000, 2000], unit: "km in un mese"),
         MedalDefinition(id: "viaggi", title: "Viaggiatore", icon: "point.topleft.down.curvedto.point.bottomright.up", group: .records, thresholds: [10, 50, 100, 250, 500], unit: "viaggi"),
+        // Esplorazione
+        MedalDefinition(id: "strade", title: "Cacciatore di strade", icon: "signpost.right.fill", group: .exploration, thresholds: [10, 25, 50, 100, 250], unit: "strade mai percorse"),
+        MedalDefinition(id: "ritorno", title: "Seconda visita", icon: "arrow.uturn.backward.circle.fill", group: .exploration, thresholds: [1, 5, 10, 25, 50], unit: "comuni rivisitati"),
+        MedalDefinition(id: "metodico", title: "Esploratore metodico", icon: "calendar.badge.checkmark", group: .exploration, thresholds: [1, 3, 5, 10], unit: "comuni in 3+ giornate"),
+        MedalDefinition(id: "attrazioni", title: "Occhio attento", icon: "eye.fill", group: .exploration, thresholds: [5, 20, 50, 100, 250], unit: "attrazioni raggiunte"),
+        // Natura
+        MedalDefinition(id: "parchi", title: "Parchi", icon: "leaf.fill", group: .nature, thresholds: [3, 10, 25, 50], unit: "parchi visitati"),
+        MedalDefinition(id: "laghi", title: "Laghi", icon: "water.waves", group: .nature, thresholds: [1, 5, 10, 20], unit: "laghi raggiunti"),
+        MedalDefinition(id: "panorami", title: "Punti panoramici", icon: "binoculars.fill", group: .nature, thresholds: [1, 5, 15, 30], unit: "panorami raggiunti"),
+        // Sfide speciali
+        MedalDefinition(id: "autunno", title: "Autunno in viaggio", icon: "leaf.arrow.triangle.circlepath", group: .special, thresholds: [3, 5, 10], unit: "comuni in un autunno"),
+        MedalDefinition(id: "weekend", title: "Weekend esplorativo", icon: "sun.and.horizon.fill", group: .special, thresholds: [5, 10, 20, 40], unit: "strade nuove in un weekend"),
     ]
 }
 
@@ -200,7 +225,7 @@ struct Passport: Codable {
     /// Versione delle regole: con la 2 contano solo i luoghi visitati a piedi.
     var version: Int?
 
-    static let currentVersion = 2
+    static let currentVersion = 3
     /// Un luogo conta se ci cammini per almeno questi metri.
     static let minWalk = 200.0
     /// Oltre questa velocità (m/s, ~9 km/h) non stai camminando.
@@ -263,13 +288,14 @@ struct Passport: Codable {
             guard let name, !name.trimmingCharacters(in: .whitespaces).isEmpty else { return }
             let country = kind == .stato ? s.countryCode ?? name : s.countryCode
             let key = VisitedPlace.key(kind, name, country)
+            let day = Calendar.current.startOfDay(for: date)
             if var existing = places[key] {
-                if date < existing.firstVisit {
-                    existing.firstVisit = date
-                    places[key] = existing
-                }
+                if date < existing.firstVisit { existing.firstVisit = date }
+                if !(existing.visitDays ?? []).contains(day) { existing.visitDays = (existing.visitDays ?? []) + [day] }
+                places[key] = existing
             } else {
-                let place = VisitedPlace(kind: kind, name: name, parent: parent, country: country, firstVisit: date)
+                let place = VisitedPlace(kind: kind, name: name, parent: parent, country: country, firstVisit: date,
+                                         visitDays: [day])
                 places[key] = place
                 added.append(place)
             }
@@ -290,7 +316,65 @@ struct Passport: Codable {
         return perDay.values.max() ?? 0
     }
 
-    func medals(trips: [Trip]) -> [MedalProgress] {
+    /// Comuni visitati in almeno `days` giornate diverse.
+    func comuni(visitedOnDays days: Int) -> Int {
+        places.values.filter { $0.kind == .comune && ($0.visitDays?.count ?? 1) >= days }.count
+    }
+
+    /// Il massimo di comuni visitati durante uno stesso autunno (23 settembre – 20 dicembre).
+    func bestAutumn(calendar: Calendar = .current) -> Int {
+        var perYear: [Int: Set<String>] = [:]
+        for p in places.values where p.kind == .comune {
+            for d in p.visitDays ?? [p.firstVisit] where Self.isAutumn(d, calendar: calendar) {
+                perYear[calendar.component(.year, from: d), default: []].insert(p.id)
+            }
+        }
+        return perYear.values.map(\.count).max() ?? 0
+    }
+
+    static func isAutumn(_ date: Date, calendar: Calendar = .current) -> Bool {
+        let m = calendar.component(.month, from: date), d = calendar.component(.day, from: date)
+        return (m == 9 && d >= 23) || m == 10 || m == 11 || (m == 12 && d <= 20)
+    }
+
+    /// Il massimo di strade nuove in uno stesso weekend.
+    static func bestWeekend(_ runs: [Date], calendar: Calendar = .current) -> Int {
+        var perWeekend: [Date: Int] = [:]
+        for r in runs {
+            guard let w = calendar.dateIntervalOfWeekend(containing: r) else { continue }
+            perWeekend[w.start, default: 0] += 1
+        }
+        return perWeekend.values.max() ?? 0
+    }
+
+    /// "Strade nuove": tratti continui di almeno `minLength` metri lontani da tutto
+    /// quello che avevi percorso prima (viaggi in ordine di data).
+    static func newStreetRuns(_ trips: [Trip], minLength: Double = 150, within meters: Double = 20) -> [Date] {
+        var index = SpatialIndex()
+        var runs: [Date] = []
+        for trip in trips.sorted(by: { $0.start < $1.start }) where trip.points.count > 1 {
+            var runStart: Date?
+            var runLength = 0.0
+            for i in 1..<trip.points.count {
+                let p = trip.points[i]
+                if index.isNear(p, within: meters) {
+                    if runLength >= minLength, let s = runStart { runs.append(s) }
+                    runStart = nil
+                    runLength = 0
+                } else {
+                    if runStart == nil { runStart = trip.points[i - 1].time }
+                    runLength += Geo.distance(trip.points[i - 1], p)
+                }
+            }
+            if runLength >= minLength, let s = runStart { runs.append(s) }
+            index.add(trip.points)
+        }
+        return runs
+    }
+
+    func medals(trips: [Trip], extras: MedalExtras = MedalExtras()) -> [MedalProgress] {
+        func seen(_ kinds: Set<SightKind>) -> Double { Double(extras.sights.filter { kinds.contains($0.kind) }.count) }
+        let nature: Set<SightKind> = [.park, .lake, .viewpoint]
         let newKm = trips.reduce(0.0) { $0 + $1.distance * ($1.newFraction ?? 0) } / 1000
         let longestKm = (trips.map(\.distance).max() ?? 0) / 1000
         func km(_ mode: TravelMode?) -> Double {
@@ -309,6 +393,15 @@ struct Passport: Codable {
             case "kmAuto": value = km(.car)
             case "mese": value = bestMonth
             case "viaggi": value = Double(trips.count)
+            case "strade": value = Double(extras.newStreetRuns.count)
+            case "ritorno": value = Double(comuni(visitedOnDays: 2))
+            case "metodico": value = Double(comuni(visitedOnDays: 3))
+            case "attrazioni": value = seen(Set(SightKind.allCases).subtracting(nature))
+            case "parchi": value = seen([.park])
+            case "laghi": value = seen([.lake])
+            case "panorami": value = seen([.viewpoint])
+            case "autunno": value = Double(bestAutumn())
+            case "weekend": value = Double(Self.bestWeekend(extras.newStreetRuns))
             default: value = Double(PlaceKind(rawValue: def.id).map(count) ?? 0)
             }
             let reachedCount = def.thresholds.filter { value >= $0 }.count
@@ -376,6 +469,7 @@ final class PassportStore: ObservableObject {
 
     init(directory: URL = TripStore.documents, notify: Bool = true) {
         fileURL = directory.appendingPathComponent("passport.json")
+        self.directory = directory
         self.notify = notify
         if let data = try? Data(contentsOf: fileURL),
            let saved = try? JSONDecoder().decode(Passport.self, from: data) {
@@ -384,12 +478,22 @@ final class PassportStore: ObservableObject {
         if passport.migrateIfNeeded() { save() }
     }
 
-    var medals: [MedalProgress] { passport.medals(trips: latestTrips) }
+    /// Strade nuove (ricalcolate quando cambiano i viaggi).
+    @Published private(set) var newStreetRuns: [Date] = []
+    private var streetsToken = 0
+    private let directory: URL
+
+    var extras: MedalExtras {
+        MedalExtras(newStreetRuns: newStreetRuns, sights: DiscoverService.loadVisits(directory: directory))
+    }
+
+    var medals: [MedalProgress] { passport.medals(trips: latestTrips, extras: extras) }
     var records: PersonalRecords { PersonalRecords.compute(latestTrips) }
 
     /// Analizza i viaggi nuovi (pochi alla volta: Apple limita le richieste).
     func update(with trips: [Trip]) {
         latestTrips = trips
+        computeStreets(trips)
         pendingTrips = trips.filter { !passport.processedTrips.contains($0.id) && $0.points.count > 1 }.count
         guard !running, pendingTrips > 0 else {
             checkMedals()
@@ -472,6 +576,22 @@ final class PassportStore: ObservableObject {
         notifyNewComuni(added.filter { $0.kind == .comune })
         checkMedals()
     }
+
+    private func computeStreets(_ trips: [Trip]) {
+        streetsToken += 1
+        let token = streetsToken
+        Task.detached(priority: .utility) {
+            let runs = Passport.newStreetRuns(trips)
+            await MainActor.run {
+                guard token == self.streetsToken else { return }
+                self.newStreetRuns = runs
+                self.checkMedals(summary: true)
+            }
+        }
+    }
+
+    /// Chiamato quando "Scopri" segna un luogo come raggiunto.
+    func sightsChanged() { checkMedals() }
 
     private func checkMedals(summary: Bool = false) {
         let unlocked = passport.unlockNew(medals)
