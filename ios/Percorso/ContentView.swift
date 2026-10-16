@@ -56,6 +56,8 @@ struct ContentView: View {
     @State private var searchingHere = false
     @State private var showParking = false
     @State private var askStopAuto = false
+    /// Pillola "Già percorsa" chiusa con la ✕ per il tratto attuale.
+    @State private var oldRoadDismissed = false
     @State private var parkingStartsWithHistory = false
     /// "Portami all'auto": avvia la navigazione appena il percorso a piedi è pronto.
     @State private var walkToCarPending = false
@@ -103,6 +105,9 @@ struct ContentView: View {
             tracker.requestPermissionIfNeeded()
             CarAudioMonitor.shared.start()
             handleLaunchArguments()
+        }
+        .onChange(of: tracker.onOldRoad) { onOld in
+            if !onOld { oldRoadDismissed = false } // su una strada nuova: la prossima volta riappare
         }
         .onChange(of: scenePhase) { phase in
             // La Live Activity del ticket si può avviare solo con l'app aperta.
@@ -201,6 +206,7 @@ struct ContentView: View {
     private var mainOverlay: some View {
         VStack(spacing: 10) {
             statusBar
+            oldRoadBanner
             if showSearchHere && !searchResults.isEmpty && planner.destination == nil {
                 Button(action: searchHere) {
                     HStack(spacing: 6) {
@@ -240,7 +246,6 @@ struct ContentView: View {
                 }
                 .shadow(radius: 4)
             }
-            oldRoadBanner
             Spacer()
             if planner.destination != nil {
                 routeCard
@@ -255,16 +260,38 @@ struct ContentView: View {
 
     @ViewBuilder
     private var oldRoadBanner: some View {
-        if tracker.isRecording && tracker.onOldRoad && alertEnabled {
-            Text("⚠️ Strada già percorsa")
-                .font(.headline)
-                .foregroundStyle(.white)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(Color.red, in: RoundedRectangle(cornerRadius: 12))
-                .shadow(radius: 4)
-                .transition(.opacity)
+        if Self.showsOldRoadPill(recording: tracker.isRecording, onOldRoad: tracker.onOldRoad,
+                                 enabled: alertEnabled, dismissed: oldRoadDismissed) {
+            // Un consiglio, non un allarme: pillola color ambra che si può chiudere.
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.counterclockwise")
+                    .font(.subheadline.weight(.bold))
+                Text("Già percorsa")
+                    .font(.subheadline.weight(.semibold))
+                Button {
+                    withAnimation { oldRoadDismissed = true }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .frame(width: 22, height: 22)
+                        .background(Color.black.opacity(0.12), in: Circle())
+                }
+                .accessibilityLabel("Chiudi l'avviso")
+            }
+            .foregroundColor(Color(red: 0.36, green: 0.22, blue: 0.0))
+            .padding(.leading, 14)
+            .padding(.trailing, 6)
+            .padding(.vertical, 6)
+            .background(Color(red: 1.0, green: 0.80, blue: 0.38), in: Capsule())
+            .shadow(color: .black.opacity(0.25), radius: 4, y: 2)
+            .transition(.opacity.combined(with: .move(edge: .top)))
         }
+    }
+
+    /// La pillola compare sulle strade già fatte, finché non la chiudi con la ✕
+    /// (torna alla prossima strada già fatta dopo una nuova).
+    static func showsOldRoadPill(recording: Bool, onOldRoad: Bool, enabled: Bool, dismissed: Bool) -> Bool {
+        recording && onOldRoad && enabled && !dismissed
     }
 
     // MARK: - Navigazione

@@ -62,7 +62,7 @@ Così durante i viaggi puoi scegliere strade nuove.
   strade proposte.
 - **Filtri**: considera solo i viaggi degli ultimi 12 / 6 mesi / 30 giorni e/o
   di un solo mezzo (vale per mappa e avvisi).
-- **Avvisi**: banner e vibrazione con l'app aperta, notifica in background,
+- **Avvisi**: pillola color ambra "↺ Già percorsa" (si chiude con la ✕) e vibrazione con l'app aperta, notifica in background,
   **avviso vocale** "Strada già percorsa" (mai / solo con cuffie o CarPlay /
   sempre).
 - **Live Activity** sul blocco schermo e nella Dynamic Island durante la

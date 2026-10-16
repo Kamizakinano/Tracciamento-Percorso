@@ -633,8 +633,8 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
         guard Date().timeIntervalSince(lastNotification) > 60 else { return }
         lastNotification = Date()
         let content = UNMutableNotificationContent()
-        content.title = "Strada già percorsa"
-        content.body = "Stai passando su una strada che hai già fatto."
+        content.title = "↺ Strada già percorsa"
+        content.body = "Ci sei già passato: se vuoi, cerca una strada nuova ✨"
         content.sound = .default
         let request = UNNotificationRequest(identifier: "old-road", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)

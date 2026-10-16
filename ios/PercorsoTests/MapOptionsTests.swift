@@ -34,3 +34,13 @@ final class NavigationVoiceButtonTests: XCTestCase {
         XCTAssertTrue(NavigationSession.voiceButton(on: false).label.contains("Attiva"))
     }
 }
+
+final class OldRoadPillTests: XCTestCase {
+    func testPillShowsOnlyOnOldRoadUntilDismissed() {
+        XCTAssertTrue(ContentView.showsOldRoadPill(recording: true, onOldRoad: true, enabled: true, dismissed: false))
+        XCTAssertFalse(ContentView.showsOldRoadPill(recording: true, onOldRoad: true, enabled: true, dismissed: true), "chiusa con la ✕")
+        XCTAssertFalse(ContentView.showsOldRoadPill(recording: true, onOldRoad: false, enabled: true, dismissed: false), "strada nuova")
+        XCTAssertFalse(ContentView.showsOldRoadPill(recording: true, onOldRoad: true, enabled: false, dismissed: false), "avvisi spenti")
+        XCTAssertFalse(ContentView.showsOldRoadPill(recording: false, onOldRoad: true, enabled: true, dismissed: false), "non registra")
+    }
+}
