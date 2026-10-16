@@ -613,8 +613,10 @@ struct ContentView: View {
                     Button(action: startNavigation) {
                         Label("Avvia", systemImage: "location.north.fill")
                             .font(.headline)
+                            .lineLimit(1)
+                            .fixedSize()
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 28)
+                            .padding(.horizontal, 20)
                             .padding(.vertical, 12)
                             .background(planner.current == nil ? Color.gray : Color.green, in: Capsule())
                     }
