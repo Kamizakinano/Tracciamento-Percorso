@@ -25,3 +25,12 @@ final class BackupCopyTests: XCTestCase {
                           "la copia non deve sovrascrivere il backup")
     }
 }
+
+final class NavigationVoiceButtonTests: XCTestCase {
+    func testMuteButtonShowsCurrentState() {
+        XCTAssertEqual(NavigationSession.voiceButton(on: true).icon, "speaker.wave.2.fill")
+        XCTAssertEqual(NavigationSession.voiceButton(on: false).icon, "speaker.slash.fill")
+        XCTAssertTrue(NavigationSession.voiceButton(on: true).label.contains("muto"))
+        XCTAssertTrue(NavigationSession.voiceButton(on: false).label.contains("Attiva"))
+    }
+}

@@ -52,7 +52,8 @@ Così durante i viaggi puoi scegliere strade nuove.
   salire e scendere. Se in una zona mancano i dati, "Apple Mappe" apre le
   indicazioni con i mezzi in Mappe.
 - **Navigazione nell'app** (Avvia): prossima svolta con freccia e distanza,
-  guida vocale in italiano, mappa 3D che ruota con la direzione, orario di
+  guida vocale in italiano (con il pulsante altoparlante la metti in muto o la
+  riattivi, anche durante la navigazione), mappa 3D che ruota con la direzione, orario di
   arrivo, tempo e km rimanenti, ricalcolo automatico se esci dal percorso.
   La svolta compare anche nella Live Activity sul blocco schermo; il viaggio
   viene registrato e salvato come "Verso <destinazione>".

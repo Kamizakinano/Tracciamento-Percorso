@@ -32,6 +32,11 @@ final class VoiceAlert: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.speak(utterance)
     }
 
+    /// Zittisce subito la frase in corso (pulsante muto del navigatore).
+    func stop() {
+        synthesizer.stopSpeaking(at: .immediate)
+    }
+
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         // Restituisce l'audio alle altre app (musica, navigatore).
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)

@@ -145,6 +145,12 @@ final class NavigationSession: ObservableObject {
         }
     }
 
+    /// Icona e descrizione del pulsante muto/audio del navigatore.
+    static func voiceButton(on: Bool) -> (icon: String, label: String) {
+        on ? ("speaker.wave.2.fill", "Metti in muto il navigatore")
+           : ("speaker.slash.fill", "Attiva l'audio del navigatore")
+    }
+
     private func speak(_ text: String) {
         guard voiceEnabled, Settings.navigationVoiceOn else { return }
         VoiceAlert.shared.speak(text)

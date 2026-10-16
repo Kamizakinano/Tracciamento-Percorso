@@ -28,6 +28,7 @@ struct ContentView: View {
     @AppStorage(Settings.alertEnabled) private var alertEnabled = true
     @AppStorage(Settings.mapStyle) private var mapStyle = 0
     @AppStorage(Settings.showTraffic) private var showTraffic = false
+    @AppStorage(Settings.navigationVoice) private var navigationVoice = true
     @AppStorage(Settings.travelMode) private var travelMode = ""
 
     @State private var mapState = MapState()
@@ -295,7 +296,11 @@ struct ContentView: View {
             .background(Color(red: 0.08, green: 0.42, blue: 0.28), in: RoundedRectangle(cornerRadius: 20))
             .shadow(radius: 6)
 
-            oldRoadBanner
+            HStack {
+                oldRoadBanner
+                Spacer(minLength: 0)
+                voiceButton
+            }
             Spacer()
 
             if !follow {
@@ -331,6 +336,27 @@ struct ContentView: View {
         }
         .padding()
         .animation(.easeInOut(duration: 0.2), value: tracker.onOldRoad)
+    }
+
+    /// Muto / audio del navigatore: vale subito, anche a navigazione in corso.
+    private var voiceButton: some View {
+        let style = NavigationSession.voiceButton(on: navigationVoice)
+        return Button {
+            navigationVoice.toggle()
+            if navigationVoice {
+                if navigation.isActive { VoiceAlert.shared.speak("Guida vocale attiva. \(navigation.instruction)") }
+            } else {
+                VoiceAlert.shared.stop()
+            }
+        } label: {
+            Image(systemName: style.icon)
+                .font(.title3)
+                .foregroundColor(navigationVoice ? .accentColor : .red)
+                .frame(width: 48, height: 48)
+                .background(.regularMaterial, in: Circle())
+        }
+        .shadow(radius: 3)
+        .accessibilityLabel(style.label)
     }
 
     private func navStat(_ value: String, _ label: String) -> some View {
@@ -583,6 +609,7 @@ struct ContentView: View {
                             .font(.subheadline)
                     }
                 } else {
+                    voiceButton
                     Button(action: startNavigation) {
                         Label("Avvia", systemImage: "location.north.fill")
                             .font(.headline)
