@@ -15,5 +15,7 @@ Elenco delle richieste rimandate (aggiornato in chat). Si fanno una alla volta, 
    parcheggi e foto, da condividere come immagine (da confermare).
 4. **Dopo il viaggio**: controllare batteria (Impostazioni → Batteria), buchi nei viaggi, parcheggi
    sbagliati e comuni mancanti nel Passaporto, con gli screenshot dell'utente.
-5. **Hub**: app contenitore con Percorso, Spese e Resi (vedi il testo PROMPT-Hub.md in chat).
+5. **Scopri – Giro dei monumenti**: scegli il tempo (30 min, 1 h, 2 h) e l'app crea un anello a piedi
+   che passa da 3–6 luoghi vicini preferendo strade nuove (le prime parti di Scopri sono nella 1.6).
+6. **Hub**: app contenitore con Percorso, Spese e Resi (vedi il testo PROMPT-Hub.md in chat).
    Dopo la prima versione chiedere: compilazione subito su richiesta o una volta per notte.

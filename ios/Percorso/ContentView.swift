@@ -24,6 +24,7 @@ struct ContentView: View {
     @StateObject private var explore = ExploreService()
     @StateObject private var planner = RoutePlanner()
     @StateObject private var transit = TransitPlanner()
+    @StateObject private var discover = DiscoverService()
     @AppStorage(Settings.showHistory) private var showHistory = true
     @AppStorage(Settings.alertEnabled) private var alertEnabled = true
     @AppStorage(Settings.mapStyle) private var mapStyle = 0
@@ -80,6 +81,9 @@ struct ContentView: View {
                     fitResults: fitResults,
                     parking: parking.current,
                     parkingHints: parkingHints,
+                    sights: discover.sights,
+                    visitedSights: discover.visited,
+                    sightsVersion: discover.version,
                     mapType: mapType,
                     showsTraffic: showTraffic,
                     place: place,
@@ -88,9 +92,14 @@ struct ContentView: View {
                     focus: $focus,
                     zoomRequest: $zoomRequest,
                     onRegionChange: regionChanged,
-                    onUserLocation: { mapState.userLocation = $0 },
+                    onUserLocation: { here in
+                        mapState.userLocation = here
+                        discover.update(location: here)
+                        discover.moved(to: here)
+                    },
                     onSelectResult: selectResult,
-                    onSelectParking: { openParking() })
+                    onSelectParking: { openParking() },
+                    onSelectSight: walkTo)
                 .ignoresSafeArea()
 
             if navigation.isActive {
@@ -234,13 +243,14 @@ struct ContentView: View {
                     } else if let car = parking.current, searchResults.isEmpty {
                         carChip(car)
                     }
-                    if let text = info ?? explore.message ?? planner.message { infoChip(text) }
+                    if let text = info ?? explore.message ?? discover.message ?? planner.message { infoChip(text) }
                 }
                 Spacer()
                 VStack(spacing: 10) {
                     roundButton("magnifyingglass") { search = SearchRequest(query: "") }
                     mapStyleMenu
                     exploreButton
+                    discoverButton
                     parkingButton
                     autoRecordButton
                 }
@@ -251,6 +261,8 @@ struct ContentView: View {
                 routeCard
             } else if !searchResults.isEmpty {
                 resultsCard
+            } else if let suggestion = currentSuggestion {
+                suggestionCard(suggestion)
             }
             controls
         }
@@ -982,6 +994,76 @@ struct ContentView: View {
         openParking()
     }
 
+    // MARK: - Scopri (monumenti e luoghi da vedere)
+
+    private var discoverButton: some View {
+        Button {
+            discover.toggle(center: mapState.userLocation ?? tracker.currentLocation?.coordinate ?? mapState.region?.center)
+        } label: {
+            ZStack {
+                circleIcon("building.columns", tint: discover.isOn ? .white : .accentColor,
+                           background: discover.isOn ? AnyShapeStyle(Color.purple) : AnyShapeStyle(Material.regularMaterial))
+                if discover.isLoading { ProgressView().tint(.white) }
+            }
+        }
+        .accessibilityLabel("Scopri: monumenti e luoghi da vedere")
+    }
+
+    private var currentSuggestion: SightSuggestion? {
+        discover.suggestion(from: mapState.userLocation ?? tracker.currentLocation?.coordinate,
+                            heading: DiscoverService.heading(of: tracker.points))
+    }
+
+    /// "Qui vicino c'è qualcosa da vedere": tocca Portami per andarci a piedi.
+    private func suggestionCard(_ s: SightSuggestion) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: s.sight.kind.icon)
+                .font(.title3)
+                .foregroundColor(.white)
+                .frame(width: 42, height: 42)
+                .background(Color.purple, in: Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(s.sight.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(Color(uiColor: .label))
+                    .lineLimit(1)
+                Text("\(s.sight.kind.label) · \(s.text)")
+                    .font(.caption)
+                    .foregroundColor(Color(uiColor: .secondaryLabel))
+            }
+            Spacer(minLength: 4)
+            Button { walkTo(s.sight) } label: {
+                Text("Portami")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 7)
+                    .background(Color.purple, in: Capsule())
+            }
+            Button { withAnimation { discover.dismiss(s.sight) } } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(Color(uiColor: .secondaryLabel))
+                    .frame(width: 26, height: 26)
+                    .background(Color.secondary.opacity(0.15), in: Circle())
+            }
+            .accessibilityLabel("Proponi un altro luogo")
+        }
+        .padding(12)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .shadow(radius: 4)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    /// Percorso a piedi fino al luogo e navigazione.
+    private func walkTo(_ sight: Sight) {
+        clearResults()
+        let p = Place(name: sight.name, coordinate: sight.coordinate, address: sight.kind.label)
+        place = p
+        walkToCarPending = true
+        planRoute(to: p, mode: .foot)
+    }
+
     private func walkToCar(_ spot: ParkingSpot) {
         clearResults()
         let p = Place(name: "La tua auto", coordinate: spot.coordinate, address: spot.address)
@@ -1081,6 +1163,13 @@ struct ContentView: View {
             tracker.refreshSchedule()
         }
         if args.contains("-passportDemo") { passport.loadDemo() }
+        if args.contains("-discoverDemo") {
+            discover.loadDemo()
+            let here = CLLocationCoordinate2D(latitude: 45.4642, longitude: 9.1900)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) {
+                zoomRequest = MKCoordinateRegion(center: here, latitudinalMeters: 700, longitudinalMeters: 700)
+            }
+        }
         if args.contains("-showParking") { openParking() }
         if args.contains("-parkingHistory") { openParking(history: true) }
         if args.contains("-showTrips") { showTrips = true }

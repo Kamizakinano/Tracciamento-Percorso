@@ -21,6 +21,10 @@ struct MapView: UIViewRepresentable {
     /// Auto parcheggiata e parcheggi passati vicino alla destinazione.
     var parking: ParkingSpot? = nil
     var parkingHints: [ParkingSpot] = []
+    /// "Scopri": luoghi da vedere (viola) e già visti (grigi con ✓).
+    var sights: [Sight] = []
+    var visitedSights: Set<String> = []
+    var sightsVersion = 0
     let mapType: MKMapType
     /// Traffico di Apple (spento di serie: i suoi colori somigliano a quelli delle strade già fatte).
     var showsTraffic = false
@@ -37,6 +41,8 @@ struct MapView: UIViewRepresentable {
     var onSelectResult: (Place) -> Void = { _ in }
     /// Tocco sul segnaposto dell'auto.
     var onSelectParking: () -> Void = {}
+    /// Tocco su "Portami" nel fumetto di un luogo da vedere.
+    var onSelectSight: (Sight) -> Void = { _ in }
 
     /// Colori per numero di passaggi: 1 · 2-3 · 4 o più.
     static let levelColors: [UIColor] = [.systemYellow, .systemOrange, .systemRed]
@@ -124,6 +130,12 @@ struct MapView: UIViewRepresentable {
             c.hintAnnotations = parkingHints.map { ParkingAnnotation(spot: $0, isCar: false) }
             map.addAnnotations(c.hintAnnotations)
             c.hintsKey = hintsKey
+        }
+        if c.sightsVersion != sightsVersion {
+            map.removeAnnotations(c.sightAnnotations)
+            c.sightAnnotations = sights.map { SightAnnotation(sight: $0, visited: visitedSights.contains($0.id)) }
+            map.addAnnotations(c.sightAnnotations)
+            c.sightsVersion = sightsVersion
         }
 
         if c.routeID != route?.id {
@@ -269,6 +281,8 @@ struct MapView: UIViewRepresentable {
         var parkingAnnotation: ParkingAnnotation?
         var hintsKey = ""
         var hintAnnotations: [ParkingAnnotation] = []
+        var sightsVersion = -1
+        var sightAnnotations: [SightAnnotation] = []
         var transitOverlays: [MKOverlay] = []
         var currentCount = -1
         var placeID: UUID?
@@ -326,6 +340,21 @@ struct MapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MKMapView, viewFor annotation: MKAnnotation) -> MKAnnotationView? {
+            if let s = annotation as? SightAnnotation {
+                let id = "sight"
+                let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView
+                    ?? MKMarkerAnnotationView(annotation: s, reuseIdentifier: id)
+                view.annotation = s
+                view.markerTintColor = s.visited ? .systemGray : .systemPurple
+                view.glyphImage = UIImage(systemName: s.visited ? "checkmark" : s.sight.kind.icon)
+                view.displayPriority = s.visited ? .defaultLow : .defaultHigh
+                view.canShowCallout = true
+                let button = UIButton(type: .system)
+                button.setImage(UIImage(systemName: "figure.walk.circle.fill"), for: .normal)
+                button.frame = CGRect(x: 0, y: 0, width: 36, height: 36)
+                view.rightCalloutAccessoryView = button
+                return view
+            }
             if let spot = annotation as? ParkingAnnotation {
                 let id = spot.isCar ? "car" : "parkingHint"
                 let view = mapView.dequeueReusableAnnotationView(withIdentifier: id) as? MKMarkerAnnotationView
@@ -379,6 +408,7 @@ struct MapView: UIViewRepresentable {
 
         func mapView(_ mapView: MKMapView, annotationView view: MKAnnotationView, calloutAccessoryControlTapped control: UIControl) {
             if let result = view.annotation as? ResultAnnotation { parent.onSelectResult(result.place) }
+            if let s = view.annotation as? SightAnnotation { parent.onSelectSight(s.sight) }
         }
 
         func mapView(_ mapView: MKMapView, didUpdate userLocation: MKUserLocation) {
@@ -422,5 +452,19 @@ final class ParkingAnnotation: NSObject, MKAnnotation {
     init(spot: ParkingSpot, isCar: Bool) {
         self.spot = spot
         self.isCar = isCar
+    }
+}
+
+/// Segnaposto di un luogo da vedere ("Scopri").
+final class SightAnnotation: NSObject, MKAnnotation {
+    let sight: Sight
+    let visited: Bool
+    var coordinate: CLLocationCoordinate2D { sight.coordinate }
+    var title: String? { sight.name }
+    var subtitle: String? { visited ? "\(sight.kind.label) · già visto ✓" : sight.kind.label }
+
+    init(sight: Sight, visited: Bool) {
+        self.sight = sight
+        self.visited = visited
     }
 }

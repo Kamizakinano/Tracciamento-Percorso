@@ -30,6 +30,11 @@ Così durante i viaggi puoi scegliere strade nuove.
 - **Strade nuove vicino a te** (pulsante ✨): scarica le strade della zona da
   OpenStreetMap e mostra in verde tratteggiato quelle che non hai mai fatto.
   Si aggiorna quando sposti la mappa.
+- **Scopri** (pulsante 🏛): monumenti, chiese, castelli, musei, panorami,
+  piazze e fontane vicino a te (da OpenStreetMap, in qualunque lingua). Mentre
+  cammini una schedina propone il luogo non ancora visto più comodo nella tua
+  direzione ("Portami" avvia la navigazione a piedi, ✕ ne propone un altro); i
+  luoghi dove passi vicino diventano grigi con ✓.
 - **Ricerca "Dove vuoi andare?"** (lente): partenza (di solito "La mia
   posizione") e destinazione, suggerimenti vicini a te, luoghi recenti, scambio
   ⇅ e scelta del mezzo. Scelta la destinazione, l'app calcola i percorsi.
