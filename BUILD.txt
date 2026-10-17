@@ -1,0 +1,5 @@
+Versione: 1.8.37
+File: Percorso-v1.8.37.ipa
+Commit: e01a2e3d84095ea5d7e8da6f03de93021999cefd
+Branch: claude/nuovo-progetto-isolato-ckksqa
+Data: 2026-10-17T10:06Z
