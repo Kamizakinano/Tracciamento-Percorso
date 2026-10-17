@@ -20,6 +20,7 @@ final class TripStore: ObservableObject {
     private let queue = DispatchQueue(label: "percorso.index", qos: .userInitiated)
     private var rebuildToken = 0
     private var geocoding = false
+    private var cleaning = false
     /// Chiamato a ogni modifica dei viaggi (il Passaporto analizza quelli nuovi).
     var onTripsChanged: (([Trip]) -> Void)?
 
@@ -35,6 +36,7 @@ final class TripStore: ObservableObject {
         index = Self.makeIndex(trips.filter { filter.includes($0) })
         rebuild()
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.geocodeMissing() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 20) { [weak self] in self?.cleanTracks() }
     }
 
     // MARK: - Modifiche
@@ -43,6 +45,7 @@ final class TripStore: ObservableObject {
         trips.append(trip)
         changed()
         geocodeMissing()
+        cleanTracks()
     }
 
     func add(contentsOf newTrips: [Trip]) {
@@ -128,6 +131,40 @@ final class TripStore: ObservableObject {
                 self.lines = lines
                 self.version += 1
             }
+        }
+    }
+
+    // MARK: - Tracciati più dritti
+
+    static func needsCleaning(_ trip: Trip) -> Bool {
+        (trip.cleanVersion ?? 0) < TrackCleaner.version
+    }
+
+    /// Raddrizza i viaggi non ancora puliti, uno alla volta e con calma.
+    /// Parte sempre dal tracciato originale, che resta in `rawPoints`.
+    func cleanTracks() {
+        guard !cleaning, !ProcessInfo.processInfo.arguments.contains("-screenshots"),
+              trips.contains(where: Self.needsCleaning) else { return }
+        cleaning = true
+        Task { @MainActor in
+            // I più recenti prima: sono quelli che guardi di più.
+            let pending = trips.filter(Self.needsCleaning).sorted { $0.start > $1.start }
+            for trip in pending {
+                let raw = trip.rawPoints ?? trip.points
+                var cleaned: [TrackPoint]? = raw
+                if raw.count > 2 {
+                    cleaned = await TrackCleaner.process(raw, mode: trip.effectiveMode)
+                }
+                guard let cleaned else { break } // niente rete: si riprova al prossimo viaggio o avvio
+                guard let i = trips.firstIndex(where: { $0.id == trip.id }) else { continue }
+                trips[i].rawPoints = raw
+                trips[i].points = cleaned
+                trips[i].cleanVersion = TrackCleaner.version
+                save()
+                rebuild()
+                BackupManager.shared.scheduleBackup(trips)
+            }
+            cleaning = false
         }
     }
 

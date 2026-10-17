@@ -39,7 +39,9 @@ final class LocationTracker: NSObject, ObservableObject, CLLocationManagerDelega
     /// davvero (era un semaforo) viene annullato.
     private var pauseParking: TrackPoint?
 
-    private let maxAccuracy = 50.0
+    /// Punti meno precisi di così vengono scartati; a piedi serve più precisione
+    /// (tra i palazzi il GPS "salta" e la linea diventa a zig-zag).
+    private var maxAccuracy: Double { currentMode == .foot ? 25 : 50 }
     private let currentURL = TripStore.documents.appendingPathComponent("current.json")
     private let screenshots = ProcessInfo.processInfo.arguments.contains("-screenshots")
 

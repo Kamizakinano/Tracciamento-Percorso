@@ -106,6 +106,10 @@ struct Trip: Codable, Identifiable, Hashable {
     var newFraction: Double?
     /// Città o paese, ricavato dalla posizione per le statistiche.
     var locality: String?
+    /// Tracciato originale del GPS, prima di raddrizzarlo (conservato per sicurezza).
+    var rawPoints: [TrackPoint]?
+    /// Versione di `TrackCleaner` con cui è stato raddrizzato.
+    var cleanVersion: Int?
 
     var distance: Double { Geo.length(of: points) }
 

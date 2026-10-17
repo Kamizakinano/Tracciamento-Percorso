@@ -193,7 +193,8 @@ struct MapView: UIViewRepresentable {
             if let old = c.currentOverlay { map.removeOverlay(old) }
             c.currentOverlay = nil
             if currentPoints.count > 1 {
-                let coords = currentPoints.map(\.coordinate)
+                // Linea in diretta già ammorbidita (il GPS "trema").
+                let coords = TrackCleaner.smooth(currentPoints).map(\.coordinate)
                 let line = MKPolyline(coordinates: coords, count: coords.count)
                 line.title = Coordinator.current
                 map.addOverlay(line, level: .aboveRoads)

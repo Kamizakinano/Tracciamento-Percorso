@@ -17,6 +17,13 @@ Così durante i viaggi puoi scegliere strade nuove.
   strade). Se il GPS si ferma mentre ti stai muovendo (semaforo, coda,
   galleria), al risveglio il tratto mancante viene ricostruito lungo le strade
   invece di spezzare il viaggio.
+- **Tracciati più dritti**: a fine viaggio la linea viene ripulita (via i salti
+  del GPS tra i palazzi, via il tremolio) e, se c'è internet, agganciata alle
+  strade vere con i percorsi di Apple, a tratti di circa 250 m (600 m in auto).
+  I tratti che non combaciano con una strada restano solo ripuliti. Lo stesso
+  vale una volta per i viaggi già salvati, con calma in background; il
+  tracciato originale resta conservato nel file. A piedi vengono scartati i
+  punti GPS poco precisi (oltre 25 m) e la linea blu in diretta è già ammorbidita.
 - **Pulsante ∞ sulla mappa**: accende o spegne con un tocco la registrazione
   automatica (come "Registra sempre", funziona anche in background); verde =
   attiva. Anche toccando "Automatico" in basso puoi disattivarla.
